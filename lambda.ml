@@ -7,9 +7,6 @@ type ty =
   | TyArr of ty * ty
 ;;
 
-type context =
-  (string * ty) list
-;;
 
 type term =
     TmTrue
@@ -27,24 +24,52 @@ type term =
 ;;
 
 
-(* CONTEXT MANAGEMENT *)
+type command =
+    Bind of string * term (* x = t *)
+  | Eval of term (* evalua t *)
+  | Quit (* quit *)
+;;
+
+type binding =
+    TyBind of ty (* guarda el tipo *)
+  | TyTmBind of (ty * term) (* guarda el tipo y el termino *)
+;;
+
+type context =
+  (string * binding) list (* x =<binding> *)
+;;
+
+
 
 let emptyctx =
-  []
+  []    (* contexto vacio *)
 ;;
 
-let addbinding ctx x bind =
-  (x, bind) :: ctx
+let addtbinding ctx x bind =
+  (x, TyBind bind) :: ctx (* añade una variable y tipo al contexto *)
 ;;
 
-let getbinding ctx x =
-  List.assoc x ctx
+let gettbinding ctx x =
+  match List.assoc x ctx with (* busca x en el contexto *)
+      TyBind ty -> ty (* devuelve el tipo de la variable en caso de que solo haya tipo *)
+    | TyTmBind (ty, _) -> ty (* devuelve el tipo de la variable si tmb hay valor *)
 ;;
+
+let addvbinding ctx x ty t =
+  (x, TyTmBind (ty, t)) :: ctx (* añade una variable, tipo y termino al contexto *)
+;;
+
+let getvbinding ctx x = 
+  match List.assoc x ctx with (* busca x en el contexto *)
+      TyTmBind (_, t) -> t (* devuelve el termino de la variable *)
+    | _ -> raise Not_found (* si no tiene termino asociado lanza error *)
+;;
+
 
 
 (* TYPE MANAGEMENT (TYPING) *)
 
-let rec string_of_ty ty = match ty with
+let rec string_of_ty ty = match ty with (* para pasar de tipo a cadena *)
     TyBool ->
       "Bool"
   | TyNat ->
@@ -56,7 +81,7 @@ let rec string_of_ty ty = match ty with
 exception Type_error of string
 ;;
 
-let rec typeof ctx tm = match tm with
+let rec typeof ctx tm = match tm with (* conversiones a tipos todas siguen la rules for typing *)
     (* T-True *)
     TmTrue ->
       TyBool
@@ -66,7 +91,7 @@ let rec typeof ctx tm = match tm with
       TyBool
 
     (* T-If *)
-  | TmIf (t1, t2, t3) ->
+  | TmIf (t1, t2, t3) -> (* si es bool comprueba que los dos tengan el mismo tipo y devulve el tipo*)
       if typeof ctx t1 = TyBool then
         let tyT2 = typeof ctx t2 in
         if typeof ctx t3 = tyT2 then tyT2
@@ -95,12 +120,12 @@ let rec typeof ctx tm = match tm with
 
     (* T-Var *)
   | TmVar x ->
-      (try getbinding ctx x with
+      (try gettbinding ctx x with
        _ -> raise (Type_error ("no binding type for variable " ^ x)))
 
     (* T-Abs *)
   | TmAbs (x, tyT1, t2) ->
-      let ctx' = addbinding ctx x tyT1 in
+      let ctx' = addtbinding ctx x tyT1 in
       let tyT2 = typeof ctx' t2 in
       TyArr (tyT1, tyT2)
 
@@ -117,7 +142,7 @@ let rec typeof ctx tm = match tm with
     (* T-Let *)
   | TmLetIn (x, t1, t2) ->
       let tyT1 = typeof ctx t1 in
-      let ctx' = addbinding ctx x tyT1 in
+      let ctx' = addtbinding ctx x tyT1 in
       typeof ctx' t2
   
     (* T-Fix *)
@@ -133,51 +158,63 @@ let rec typeof ctx tm = match tm with
 
 (* TERMS MANAGEMENT (EVALUATION) *)
 
-let rec string_of_term = function
-    TmTrue ->
-      "true"
-  | TmFalse ->
-      "false"
+let rec string_of_term t = (* para pasar de termino a cadena *)
+  match t with
+  | TmTrue -> "true"
+  | TmFalse -> "false"
+  | TmZero -> "0"
   | TmIf (t1,t2,t3) ->
-      "if " ^ "(" ^ string_of_term t1 ^ ")" ^
-      " then " ^ "(" ^ string_of_term t2 ^ ")" ^
-      " else " ^ "(" ^ string_of_term t3 ^ ")"
-  | TmZero ->
-      "0"
+      "if " ^ string_of_term t1 ^
+      " then " ^ string_of_term t2 ^
+      " else " ^ string_of_term t3
   | TmSucc t ->
-     let rec f n t' = match t' with
-          TmZero -> string_of_int n
+      let rec f n t' = match t' with
+        | TmZero -> string_of_int n
         | TmSucc s -> f (n+1) s
-        | _ -> "succ " ^ "(" ^ string_of_term t ^ ")"
+        | _ -> "succ " ^ string_of_atom t'
       in f 1 t
-  | TmPred t ->
-      "pred " ^ "(" ^ string_of_term t ^ ")"
-  | TmIsZero t ->
-      "iszero " ^ "(" ^ string_of_term t ^ ")"
-  | TmVar s ->
-      s
+  | TmPred t -> "pred " ^ string_of_atom t ^ ""
+  | TmIsZero t -> "iszero " ^ string_of_atom t ^ ""
+  | TmVar s -> s
   | TmAbs (s, tyS, t) ->
-      "(lambda " ^ s ^ ":" ^ string_of_ty tyS ^ ". " ^ string_of_term t ^ ")"
-  | TmApp (t1, t2) ->
-      "(" ^ string_of_term t1 ^ " " ^ string_of_term t2 ^ ")"
+      "lambda " ^ s ^ ":" ^ string_of_ty tyS ^ ". " ^ string_of_term t ^ ""
+  | TmApp _ as t -> string_of_app t
   | TmLetIn (s, t1, t2) ->
       "let " ^ s ^ " = " ^ string_of_term t1 ^ " in " ^ string_of_term t2
   | TmFix t ->
-      (*"fix " ^ "(" ^ string_of_term t ^ ")"*)
-      "(fix " ^ string_of_term t ^ ")"
+      "fix " ^ string_of_term t ^ ""
+
+
+and string_of_atom t =
+  match t with
+  | TmVar s -> s
+  | TmTrue -> "true"
+  | TmFalse -> "false"
+  | TmZero -> "0"
+  | _ -> "(" ^ string_of_term t ^ ")"
+
+and string_of_app t =
+  match t with
+  | TmApp (t1, t2) ->
+      string_of_app t1 ^ " " ^ string_of_atom t2
+  | t -> string_of_atom t
 ;;
 
-let rec ldif l1 l2 = match l1 with
+
+
+
+
+let rec ldif l1 l2 = match l1 with (* devuelve lo que está en l1 pero no en l2  *)
     [] -> []
   | h::t -> if List.mem h l2 then ldif t l2 else h::(ldif t l2)
 ;;
 
-let rec lunion l1 l2 = match l1 with
+let rec lunion l1 l2 = match l1 with (* une dos listas sin repetir elementos *)
     [] -> l2
   | h::t -> if List.mem h l2 then lunion t l2 else h::(lunion t l2)
 ;;
 
-let rec free_vars tm = match tm with
+let rec free_vars tm = match tm with (* calcula las variables libres de un termino *)
     TmTrue ->
       []
   | TmFalse ->
@@ -208,7 +245,7 @@ let rec fresh_name x l =
   if not (List.mem x l) then x else fresh_name (x ^ "'") l
 ;;
 
-let rec subst x s tm = match tm with
+let rec subst x s tm = match tm with (* sustitucion de variable x por termino s en tm abstraccion *)
     TmTrue ->
       TmTrue
   | TmFalse ->
@@ -262,7 +299,7 @@ let rec isval tm = match tm with
 exception NoRuleApplies
 ;;
 
-let rec eval1 tm = match tm with
+let rec eval1 ctx tm = match tm with
     (* E-IfTrue *)
     TmIf (TmTrue, t2, _) ->
       t2
@@ -273,12 +310,12 @@ let rec eval1 tm = match tm with
 
     (* E-If *)
   | TmIf (t1, t2, t3) ->
-      let t1' = eval1 t1 in
+      let t1' = eval1 ctx t1 in
       TmIf (t1', t2, t3)
 
     (* E-Succ *)
   | TmSucc t1 ->
-      let t1' = eval1 t1 in
+      let t1' = eval1 ctx t1 in
       TmSucc t1'
 
     (* E-PredZero *)
@@ -291,7 +328,7 @@ let rec eval1 tm = match tm with
 
     (* E-Pred *)
   | TmPred t1 ->
-      let t1' = eval1 t1 in
+      let t1' = eval1 ctx t1 in
       TmPred t1'
 
     (* E-IszeroZero *)
@@ -304,7 +341,7 @@ let rec eval1 tm = match tm with
 
     (* E-Iszero *)
   | TmIsZero t1 ->
-      let t1' = eval1 t1 in
+      let t1' = eval1 ctx t1 in
       TmIsZero t1'
 
     (* E-AppAbs *)
@@ -313,12 +350,12 @@ let rec eval1 tm = match tm with
 
     (* E-App2: evaluate argument before applying function *)
   | TmApp (v1, t2) when isval v1 ->
-      let t2' = eval1 t2 in
+      let t2' = eval1 ctx t2 in
       TmApp (v1, t2')
 
     (* E-App1: evaluate function before argument *)
   | TmApp (t1, t2) ->
-      let t1' = eval1 t1 in
+      let t1' = eval1 ctx t1 in
       TmApp (t1', t2)
 
     (* E-LetV *)
@@ -327,7 +364,7 @@ let rec eval1 tm = match tm with
 
     (* E-Let *)
   | TmLetIn(x, t1, t2) ->
-      let t1' = eval1 t1 in
+      let t1' = eval1 ctx t1 in
       TmLetIn (x, t1', t2)
     
     (* E-FixBeta *)
@@ -336,18 +373,43 @@ let rec eval1 tm = match tm with
   
     (* E-Fix *)
   | TmFix t1 ->
-      let t1' = eval1 t1 in
+      let t1' = eval1 ctx t1 in
       TmFix t1'
+  | TmVar s ->
+      getvbinding ctx s
 
   | _ ->
       raise NoRuleApplies
 ;;
 
-let rec eval tm =
-  try
-    let tm' = eval1 tm in
-    eval tm'
-  with
-    NoRuleApplies -> tm
+let apply_ctx ctx1 ctx2 = (* se sustituyen las variables libres de ctx1 por sus valores en el contexto ctx2 *)
+List.fold_left (fun t x -> subst x (getvbinding ctx2 x) t ) ctx1 (free_vars ctx1)
 ;;
+
+
+let rec eval ctx tm = (* Llama a la función de eval1 para realicar el evaluation*)
+  try
+    let tm' = eval1 ctx tm in
+    eval ctx tm'
+  with
+    NoRuleApplies -> apply_ctx tm ctx
+
+;;
+
+
+let execute ctx = function
+  Eval tm ->
+    let tyT = typeof ctx tm in
+    let tm' = eval ctx tm in
+    print_endline (string_of_term tm' ^ " : " ^ string_of_ty tyT);
+      ctx
+  | Bind (x, t) ->
+      let tyTm = typeof ctx t in
+      let tm' = eval ctx t in
+      print_endline (x ^ " = " ^ string_of_term tm' ^ " : " ^ string_of_ty tyTm);
+      addvbinding ctx x tyTm tm'
+  | Quit ->
+        raise End_of_file
+  ;;
+
 
