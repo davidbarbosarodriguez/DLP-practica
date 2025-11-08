@@ -3,8 +3,8 @@ type ty =
     TyBool
   | TyNat
   | TyArr of ty * ty
+  | TyString
 ;;
-
 
 
 type term =
@@ -20,6 +20,8 @@ type term =
   | TmApp of term * term
   | TmLetIn of string * term * term
   | TmFix of term
+  | TmString of string
+  | TmConcat of term * term
 ;;
 
 type command =
@@ -30,8 +32,9 @@ type command =
 
 type binding =
     TyBind of ty
-  | TyTmBind of (ty* term)
+  | TyTmBind of (ty * term)
 ;;
+
 type context =
   (string * binding) list
 ;;
@@ -51,4 +54,4 @@ val string_of_term : term -> string;;
 exception NoRuleApplies;;
 val eval : context -> term -> term;;
 
-val execute : context -> command -> context ;;
+val execute : context -> command -> context;;

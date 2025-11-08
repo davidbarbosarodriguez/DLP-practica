@@ -37,8 +37,8 @@ let top_level_loop () =
     print_string ">> ";
     flush stdout;
     try
-     let c = s token (from_string (read_multiline ())) in
-     loop (execute ctx c)
+      let c = s token (from_string (read_multiline ())) in
+      loop (execute ctx c)
     with
        Lexical_error ->
          print_endline "lexical error";

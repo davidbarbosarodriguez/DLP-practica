@@ -22,6 +22,9 @@ rule token = parse
   | "Bool"      { BOOL }
   | "quit"      { QUIT }
   | "Nat"       { NAT }
+  | "String"    { STRING }
+  | "quit"      { QUIT }
+  | "concat"    { CONCAT } 
   | '('         { LPAREN }
   | ')'         { RPAREN }
   | '.'         { DOT }
@@ -31,6 +34,10 @@ rule token = parse
   | ['0'-'9']+  { INTV (int_of_string (Lexing.lexeme lexbuf)) }
   | ['a'-'z']['a'-'z' '_' '0'-'9']*
                 { IDV (Lexing.lexeme lexbuf) }
+  | '"' ([^'"']*) '"'
+                { let s = Lexing.lexeme lexbuf in
+                  STRINGV (String.sub s 1 ((String.length s) - 2)) }
+  | "concat"    { CONCAT } 
   | eof         { EOF }
   | _           { raise Lexical_error }
 

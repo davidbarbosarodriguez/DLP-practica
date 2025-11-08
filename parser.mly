@@ -15,8 +15,10 @@
 %token LET
 %token LETREC
 %token IN
+%token CONCAT
 %token BOOL
 %token NAT
+%token STRING
 %token QUIT
 %token LPAREN
 %token RPAREN
@@ -28,6 +30,7 @@
 
 %token <int> INTV
 %token <string> IDV
+%token <string> STRINGV
 
 %start s
 %type <Lambda.command> s
@@ -35,67 +38,74 @@
 %%
 
 s :
-    IDV EQ term EOF         (* x = t *)
+    IDV EQ term EOF       
       { Bind ($1, $3) }     
-    | term EOF            (* t *)
+    | term EOF            
         { Eval $1 }
-    | QUIT EOF           (* quit *)
-        { Quit }          
+    | QUIT EOF           
+        { Quit }   
+    ;       
 
-(*Definicion de terminos*)
+
 term :
-    appTerm         (* por aqui va cuando es un appTerm *)
+    appTerm         
       { $1 }
-  | IF term THEN term ELSE term (* if t1 then t2 else t3 *)
+  | IF term THEN term ELSE term 
       { TmIf ($2, $4, $6) }
-  | LAMBDA IDV COLON ty DOT term   (* lambda x:T.t *)
+  | LAMBDA IDV COLON ty DOT term   
       { TmAbs ($2, $4, $6) }
-  | LET IDV EQ term IN term   (* let x = t1 in t2 *)
+  | LET IDV EQ term IN term   
       { TmLetIn ($2, $4, $6) }
-  | LETREC IDV COLON ty EQ term IN term (* letrec x:T = t1 in t2 *)
+  | LETREC IDV COLON ty EQ term IN term 
       { TmLetIn ($2, TmFix (TmAbs ($2, $4, $6)), $8) }
 
-(*Operaciones basicas de terminos*)
+
 appTerm :
-    atomicTerm      (* por aqui va cuando es un atomicTerm *)
+    atomicTerm      
       { $1 }
-  | SUCC atomicTerm (* succ t *)
+  | SUCC atomicTerm 
       { TmSucc $2 }
-  | PRED atomicTerm (* pred t *)
+  | PRED atomicTerm 
       { TmPred $2 }
-  | ISZERO atomicTerm (* iszero t *)
+  | ISZERO atomicTerm 
       { TmIsZero $2 }
-  | appTerm atomicTerm  (* t1 t2 *)
+  | CONCAT atomicTerm atomicTerm
+      { TmConcat ($2, $3) }
+  | appTerm atomicTerm  
       { TmApp ($1, $2) }
 
-(*Definicion de terminos atomicos*)
+
 atomicTerm :
-    LPAREN term RPAREN (* ( t ) *)
+    LPAREN term RPAREN 
       { $2 }
-  | TRUE (* true *)
+  | TRUE 
       { TmTrue }
-  | FALSE (* false *)
+  | FALSE 
       { TmFalse }
-  | IDV (* x *)
+  | IDV 
       { TmVar $1 }
-  | INTV (* n *)
-      { let rec f = function  (* se va haiendo el numero en base a succesores de 0 *)
+  | INTV 
+      { let rec f = function  
             0 -> TmZero
           | n -> TmSucc (f (n-1))
         in f $1 }
+ | STRINGV
+      { TmString $1 }
 
-(*tipos*)
+
 ty :
-    atomicTy (* tipo basico *)
+    atomicTy
       { $1 }
-  | atomicTy ARROW ty (* T1 -> T2 *)
+  | atomicTy ARROW ty 
       { TyArr ($1, $3) }
 
 atomicTy :
-    LPAREN ty RPAREN (* ( T ) *)
+    LPAREN ty RPAREN 
       { $2 }
-  | BOOL (* Bool *)
+  | BOOL 
       { TyBool }
-  | NAT (* Nat *)
+  | NAT 
       { TyNat }
+  | STRING
+      { TyString }
 

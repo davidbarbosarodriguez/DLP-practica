@@ -1,10 +1,10 @@
-
 (* TYPE DEFINITIONS *)
 
 type ty =
     TyBool
   | TyNat
   | TyArr of ty * ty
+  | TyString 
 ;;
 
 
@@ -21,8 +21,9 @@ type term =
   | TmApp of term * term
   | TmLetIn of string * term * term
   | TmFix of term
+  | TmString of string
+  | TmConcat of term * term
 ;;
-
 
 type command =
     Bind of string * term (* x = t *)
@@ -76,6 +77,8 @@ let rec string_of_ty ty = match ty with (* para pasar de tipo a cadena *)
       "Nat"
   | TyArr (ty1, ty2) ->
       "(" ^ string_of_ty ty1 ^ ")" ^ " -> " ^ "(" ^ string_of_ty ty2 ^ ")"
+  | TyString ->
+      "String"
 ;;
 
 exception Type_error of string
@@ -153,6 +156,17 @@ let rec typeof ctx tm = match tm with (* conversiones a tipos todas siguen la ru
              if tyT11 = tyT12 then tyT12
              else raise (Type_error "result of body not compatible with domain")
          | _ -> raise (Type_error "arrow type expected"))
+  
+    (* T-String *)
+  | TmString _ ->
+      TyString
+    (* T-Concat *)
+  | TmConcat (t1, t2) ->
+      if typeof ctx t1 = TyString && typeof ctx t2 = TyString then
+        TyString
+      else
+        raise (Type_error "arguments of concat are not all strings")
+        
 ;;
 
 
@@ -183,8 +197,11 @@ let rec string_of_term t = (* para pasar de termino a cadena *)
       "let " ^ s ^ " = " ^ string_of_term t1 ^ " in " ^ string_of_term t2
   | TmFix t ->
       "fix " ^ string_of_term t ^ ""
-
-
+  | TmString s ->
+      "\"" ^ s ^ "\""
+  | TmConcat (t1, t2) ->
+      "concat(" ^ string_of_term t1 ^ ", " ^ string_of_term t2 ^ ")"
+  
 and string_of_atom t =
   match t with
   | TmVar s -> s
@@ -198,6 +215,7 @@ and string_of_app t =
   | TmApp (t1, t2) ->
       string_of_app t1 ^ " " ^ string_of_atom t2
   | t -> string_of_atom t
+ 
 ;;
 
 
@@ -239,6 +257,10 @@ let rec free_vars tm = match tm with (* calcula las variables libres de un termi
       lunion (ldif (free_vars t2) [s]) (free_vars t1)
   | TmFix t ->
       free_vars t
+  | TmString _ ->
+      []
+  | TmConcat (t1, t2) ->
+      lunion (free_vars t1) (free_vars t2)
 ;;
 
 let rec fresh_name x l =
@@ -280,6 +302,10 @@ let rec subst x s tm = match tm with (* sustitucion de variable x por termino s 
                 TmLetIn (z, subst x s t1, subst x s (subst y (TmVar z) t2))
   | TmFix t ->
       TmFix (subst x s t)
+  | TmString str ->
+      TmString str
+  | TmConcat (t1, t2) ->
+      TmConcat (subst x s t1, subst x s t2)
 ;;
 
 let rec isnumericval tm = match tm with
@@ -293,6 +319,7 @@ let rec isval tm = match tm with
   | TmFalse -> true
   | TmAbs _ -> true
   | t when isnumericval t -> true
+  | TmString _ -> true
   | _ -> false
 ;;
 
@@ -375,6 +402,20 @@ let rec eval1 ctx tm = match tm with
   | TmFix t1 ->
       let t1' = eval1 ctx t1 in
       TmFix t1'
+    (* E-ConcatStr *)
+  | TmConcat (TmString s1, TmString s2) ->
+      TmString (s1 ^ s2)
+
+    (* E-Concat1 *)
+  | TmConcat (t1, t2) when isval t1 ->
+      let t2' = eval1 ctx t2 in
+      TmConcat (t1, t2')
+
+    (* E-Concat2 *)
+  | TmConcat (t1, t2) ->
+      let t1' = eval1 ctx t1 in
+      TmConcat (t1', t2)
+
   | TmVar s ->
       getvbinding ctx s
 
