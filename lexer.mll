@@ -23,6 +23,7 @@ rule token = parse
   | "Nat"       { NAT }
   | "String"    { STRING }
   | "quit"      { QUIT }
+  | "concat"    { CONCAT } 
   | '('         { LPAREN }
   | ')'         { RPAREN }
   | '.'         { DOT }
@@ -35,7 +36,7 @@ rule token = parse
   | '"' ([^'"']*) '"'
                 { let s = Lexing.lexeme lexbuf in
                   STRINGV (String.sub s 1 ((String.length s) - 2)) }
-  | "concat"    { CONCAT } 
+  
   | eof         { EOF }
   | _           { raise Lexical_error }
 
