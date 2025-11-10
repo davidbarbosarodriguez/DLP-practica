@@ -39,7 +39,9 @@
 
 s :
     IDV EQ term EOF       
-      { Bind ($1, $3) }     
+      { Bind ($1, $3) } 
+    | IDV EQ ty EOF       
+      { BindTy ($1, $3) }    
     | term EOF            
         { Eval $1 }
     | QUIT EOF           
@@ -108,4 +110,6 @@ atomicTy :
       { TyNat }
   | STRING
       { TyString }
+  | IDV
+      { TyVar $1 }
 

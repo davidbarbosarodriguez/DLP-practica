@@ -4,6 +4,7 @@ type ty =
   | TyNat
   | TyArr of ty * ty
   | TyString
+  | TyVar of string
 ;;
 
 
@@ -26,6 +27,7 @@ type term =
 
 type command =
     Bind of string * term
+  | BindTy of string * ty
   | Eval of term
   | Quit
 ;;
@@ -48,6 +50,7 @@ val getvbinding : context -> string -> term ;;
 
 val string_of_ty : ty -> string;;
 exception Type_error of string;;
+exception Type_alias_loop of string;;
 val typeof : context -> term -> ty;;
 
 val string_of_term : term -> string;;

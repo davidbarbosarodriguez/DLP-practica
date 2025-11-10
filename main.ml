@@ -49,6 +49,9 @@ let top_level_loop () =
      | Type_error e ->
          print_endline ("type error: " ^ e);
          loop ctx
+     | Type_alias_loop e ->
+         print_endline ("type error: " ^ e);
+         loop ctx
      | End_of_file ->
          print_endline "...bye!!!"
   in

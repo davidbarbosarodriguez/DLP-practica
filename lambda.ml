@@ -5,6 +5,7 @@ type ty =
   | TyNat
   | TyArr of ty * ty
   | TyString 
+  | TyVar of string
 ;;
 
 
@@ -27,6 +28,7 @@ type term =
 
 type command =
     Bind of string * term (* x = t *)
+  | BindTy of string * ty (* x = T *)
   | Eval of term (* evalua t *)
   | Quit (* quit *)
 ;;
@@ -79,10 +81,30 @@ let rec string_of_ty ty = match ty with (* para pasar de tipo a cadena *)
       "(" ^ string_of_ty ty1 ^ ")" ^ " -> " ^ "(" ^ string_of_ty ty2 ^ ")"
   | TyString ->
       "String"
+  | TyVar s ->
+      s
 ;;
 
 exception Type_error of string
 ;;
+exception Type_alias_loop of string
+;;
+
+
+(*funcion to resolve alias of types*)
+let rec resolve_ty ctx ty seen_aliases = match ty with
+  | TyVar s ->
+      if List.mem s seen_aliases then
+        raise (Type_alias_loop ("Bucle detectado en el alias de tipo: " ^ s));
+      let ty' = (try gettbinding ctx s with Not_found -> raise (Type_error ("Alias de tipo no encontrado: " ^ s))) in
+      (* Recursive resolution *)
+      resolve_ty ctx ty' (s :: seen_aliases)
+  | TyArr (t1, t2) ->
+      (* Resolve types in functions *)
+      TyArr (resolve_ty ctx t1 seen_aliases, resolve_ty ctx t2 seen_aliases)
+  | (TyBool | TyNat | TyString) as t -> t
+;;
+
 
 let rec typeof ctx tm = match tm with (* conversiones a tipos todas siguen la rules for typing *)
     (* T-True *)
@@ -95,9 +117,9 @@ let rec typeof ctx tm = match tm with (* conversiones a tipos todas siguen la ru
 
     (* T-If *)
   | TmIf (t1, t2, t3) -> (* si es bool comprueba que los dos tengan el mismo tipo y devulve el tipo*)
-      if typeof ctx t1 = TyBool then
+      if (resolve_ty ctx (typeof ctx t1) []) = TyBool then
         let tyT2 = typeof ctx t2 in
-        if typeof ctx t3 = tyT2 then tyT2
+        if (resolve_ty ctx (typeof ctx t3) []) = (resolve_ty ctx tyT2 []) then tyT2
         else raise (Type_error "arms of conditional have different types")
       else
         raise (Type_error "guard of conditional not a boolean")
@@ -108,17 +130,17 @@ let rec typeof ctx tm = match tm with (* conversiones a tipos todas siguen la ru
 
     (* T-Succ *)
   | TmSucc t1 ->
-      if typeof ctx t1 = TyNat then TyNat
+      if (resolve_ty ctx (typeof ctx t1) []) = TyNat then TyNat
       else raise (Type_error "argument of succ is not a number")
 
     (* T-Pred *)
   | TmPred t1 ->
-      if typeof ctx t1 = TyNat then TyNat
+      if (resolve_ty ctx (typeof ctx t1) []) = TyNat then TyNat
       else raise (Type_error "argument of pred is not a number")
 
     (* T-Iszero *)
   | TmIsZero t1 ->
-      if typeof ctx t1 = TyNat then TyBool
+      if (resolve_ty ctx (typeof ctx t1) []) = TyNat then TyBool
       else raise (Type_error "argument of iszero is not a number")
 
     (* T-Var *)
@@ -128,17 +150,18 @@ let rec typeof ctx tm = match tm with (* conversiones a tipos todas siguen la ru
 
     (* T-Abs *)
   | TmAbs (x, tyT1, t2) ->
-      let ctx' = addtbinding ctx x tyT1 in
+      let tyT1_resolved = resolve_ty ctx tyT1 [] in
+      let ctx' = addtbinding ctx x tyT1_resolved in
       let tyT2 = typeof ctx' t2 in
-      TyArr (tyT1, tyT2)
+      TyArr (tyT1_resolved, tyT2)
 
     (* T-App *)
   | TmApp (t1, t2) ->
       let tyT1 = typeof ctx t1 in
       let tyT2 = typeof ctx t2 in
-      (match tyT1 with
+      (match (resolve_ty ctx tyT1 []) with
            TyArr (tyT11, tyT12) ->
-             if tyT2 = tyT11 then tyT12
+             if (resolve_ty ctx tyT2 []) = tyT11 then tyT12
              else raise (Type_error "parameter type mismatch")
          | _ -> raise (Type_error "arrow type expected"))
 
@@ -151,7 +174,7 @@ let rec typeof ctx tm = match tm with (* conversiones a tipos todas siguen la ru
     (* T-Fix *)
   | TmFix t1 ->
       let tyT1 = typeof ctx t1 in
-      (match tyT1 with
+      (match (resolve_ty ctx tyT1 []) with
            TyArr (tyT11, tyT12) ->
              if tyT11 = tyT12 then tyT12
              else raise (Type_error "result of body not compatible with domain")
@@ -162,7 +185,7 @@ let rec typeof ctx tm = match tm with (* conversiones a tipos todas siguen la ru
       TyString
     (* T-Concat *)
   | TmConcat (t1, t2) ->
-      if typeof ctx t1 = TyString && typeof ctx t2 = TyString then
+      if (resolve_ty ctx (typeof ctx t1) []) = TyString && (resolve_ty ctx (typeof ctx t2) []) = TyString then
         TyString
       else
         raise (Type_error "arguments of concat are not all strings")
@@ -406,12 +429,12 @@ let rec eval1 ctx tm = match tm with
   | TmConcat (TmString s1, TmString s2) ->
       TmString (s1 ^ s2)
 
-    (* E-Concat1 *)
+    (* E-Concat2 *)
   | TmConcat (t1, t2) when isval t1 ->
       let t2' = eval1 ctx t2 in
       TmConcat (t1, t2')
 
-    (* E-Concat2 *)
+    (* E-Concat1 *)
   | TmConcat (t1, t2) ->
       let t1' = eval1 ctx t1 in
       TmConcat (t1', t2)
@@ -449,6 +472,14 @@ let execute ctx = function
       let tm' = eval ctx t in
       print_endline (x ^ " = " ^ string_of_term tm' ^ " : " ^ string_of_ty tyTm);
       addvbinding ctx x tyTm tm'
+  | BindTy (s, ty) ->
+      (try
+        let ty' = resolve_ty ctx ty [] in
+        print_endline (s ^ " = " ^ string_of_ty ty');
+        addtbinding ctx s ty'
+      with
+        Type_error e -> print_endline ("type error: " ^ e); ctx
+      | Type_alias_loop e -> print_endline ("type error: " ^ e); ctx)
   | Quit ->
         raise End_of_file
   ;;

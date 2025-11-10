@@ -1,0 +1,2 @@
+mirar si funciona bien el pretty printer
+mirar si se deberia heredar el tipo de una varible linkada a un tipo
