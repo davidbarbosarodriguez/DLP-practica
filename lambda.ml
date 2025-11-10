@@ -74,18 +74,22 @@ let getvbinding ctx x =
 
 (* TYPE MANAGEMENT (TYPING) *)
 
-let rec string_of_ty ty = match ty with (* para pasar de tipo a cadena *)
-    TyBool ->
-      "Bool"
-  | TyNat ->
-      "Nat"
+let rec string_of_ty ty =
+  match ty with
+  | TyBool -> "Bool"
+  | TyNat -> "Nat"
+  | TyString -> "String"
+  | TyVar s -> s
   | TyArr (ty1, ty2) ->
-      "(" ^ string_of_ty ty1 ^ ")" ^ " -> " ^ "(" ^ string_of_ty ty2 ^ ")"
-  | TyString ->
-      "String"
-  | TyVar s ->
-      s
+      let s1 =
+        match ty1 with
+        | TyArr _ -> "(" ^ string_of_ty ty1 ^ ")"
+        | _ -> string_of_ty ty1
+      in
+      let s2 = string_of_ty ty2 in
+      s1 ^ " -> " ^ s2
 ;;
+
 
 exception Type_error of string
 ;;
