@@ -26,6 +26,8 @@ type term =
   | TmConcat of term * term
 ;;
 
+
+
 type command =
     Bind of string * term (* x = t *)
   | BindTy of string * ty (* x = T *)
