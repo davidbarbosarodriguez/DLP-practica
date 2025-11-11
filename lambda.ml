@@ -604,19 +604,6 @@ let rec eval1 ctx tm = match tm with
       in
       eval_field [] fields
 
-  | TmRcd fields ->
-      let rec eval_field l_evaluados = function
-        | [] -> raise NoRuleApplies 
-        | (lbl, h)::t ->
-            if isval h then
-              eval_field ((lbl, h)::l_evaluados) t
-            else
-              (* Encontrado un no-valor, evalúalo *)
-              let h' = eval1 ctx h in
-              TmRcd (List.rev l_evaluados @ ((lbl, h')::t))
-      in
-      eval_field [] fields
-
       (* E-VARIANT*)
   | TmVariant (l, t, ty) when not (isval t) ->
       TmVariant (l, eval1 ctx t, ty)
