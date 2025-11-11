@@ -1,3 +1,4 @@
 mirar si funciona bien el pretty printer
 mirar si se deberia heredar el tipo de una varible linkada a un tipo
 mirara si en tuplas y registros se devuelve el valor y el tipo de ese valor 
+mirar si se puede dejar el dot en tupal

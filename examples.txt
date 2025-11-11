@@ -18,3 +18,25 @@ let fix = lambda f.(lambda x. f (lambda y. x x y)) (lambda x. f (lambda y. x x y
 let fix = lambda f.(lambda x. f (lambda y. x x y)) (lambda x. f (lambda y. x x y)) in let sumaux = lambda f. (lambda n. (lambda m. if (iszero n) then m else succ (f (pred n) m))) in let sum = fix sumaux in let prodaux = lambda f. (lambda n. (lambda m. if (iszero m) then 0 else sum n (f n (pred m)))) in let prod = fix prodaux in prod 12 5
 
 letrec sum : Nat -> Nat -> Nat = lambda n : Nat. lambda m : Nat. if iszero n then m else succ (sum (pred n) m) in sum 21 34
+
+
+t = {true, (lambda x:Nat. succ x) 0};;
+
+Int = <pos:Nat, zero:Bool, neg:Nat>;;
+
+p3 = <pos=3> as Int;;
+
+z0 = <zero=true> as Int;;
+
+n5 = <neg=5> as Int;;
+
+abs = L i : Int.
+case i of
+<pos=p> => (<pos=p> as Int)
+| <zero=z> => (<zero=true> as Int)
+| <neg=n> => (<pos=n> as Int);;
+
+abs = L i : Int.
+case i of
+<pos=p> => (<pos=p> as Int)
+| <neg=n> => (<pos=n> as Int);;

@@ -8,6 +8,7 @@ type ty =
   | TyVar of string
   | TyTuple of ty list
   | TyRcd of (string * ty) list
+  | TyVariant of (string * ty) list
 ;;
 
 
@@ -27,8 +28,10 @@ type term =
   | TmString of string
   | TmConcat of term * term
   | TmTuple of term list
-  | TmRcd of (string * term) list
   | TmProj of term * string
+  | TmRcd of (string * term) list
+  | TmVariant of string * term * ty
+  | TmCase of term * (string * string * term) list
 ;;
 
 
@@ -97,7 +100,11 @@ let rec string_of_ty ty =
       "{" ^ (String.concat " , " (List.map string_of_ty tys)) ^ "}"
   | TyRcd fields ->
       let field_strings = List.map (fun (label, ty) -> label ^ ": " ^ string_of_ty ty) fields in
-      "{" ^ (String.concat " , " field_strings) ^ "}"
+      "{" ^ (String.concat " , " field_strings) ^   "}"
+  | TyVariant fields -> 
+      let s_fields = List.map (fun (l, ty) -> l ^ ":" ^ string_of_ty ty) fields in
+      "<" ^ (String.concat ", " s_fields) ^ ">"
+  
 ;;
 
 
@@ -124,7 +131,8 @@ let rec resolve_ty ctx ty seen_aliases = match ty with
   | TyRcd fields ->
       let resolved_fields = List.map (fun (label, ty_field) -> (label, resolve_ty ctx ty_field seen_aliases)) fields in
       TyRcd resolved_fields
-
+  | TyVariant fields ->
+      TyVariant (List.map (fun (l, t) -> (l, resolve_ty ctx t seen_aliases)) fields)
   | (TyBool | TyNat | TyString) as t -> t
 ;;
 
@@ -230,6 +238,42 @@ let rec typeof ctx tm = match tm with (* conversiones a tipos todas siguen la ru
               List.nth tys (index-1)
              with Failure _ | Invalid_argument _ -> raise (Type_error ("invalid tuple index: " ^ lbl)))
         | _ -> raise (Type_error "argument of projection is not a record"))
+  
+    (* T-Variant *)
+  | TmVariant (l, t, ty) ->
+      (match (resolve_ty ctx ty []) with
+        TyVariant fields ->
+          (try
+            let ty_expected = List.assoc l fields in
+            let ty_t = typeof ctx t in
+            if (resolve_ty ctx ty_t []) = (resolve_ty ctx ty_expected []) then ty
+            else raise (Type_error "type of variant does not match declared type")
+          with
+            Not_found -> raise (Type_error ("label " ^ l ^ " not found in variant type")))
+        | _ -> raise (Type_error "expected a variant type"))
+    (* T-Case *)
+  | TmCase (t, branches) ->
+      (match (resolve_ty ctx (typeof ctx t) []) with
+        TyVariant fields ->
+            if branches = [] then
+              raise (Type_error "case expression has no branches");
+            let (first_label, first_var, first_branch) = List.hd branches in
+            let ty_field1 = (try List.assoc first_label fields with
+                           Not_found -> raise (Type_error ("label " ^ first_label ^ " not found in variant type"))) in
+            let ctx' = addtbinding ctx first_var ty_field1 in
+            let ty_result = typeof ctx' first_branch in
+
+            List.iter (fun (l, v, br) ->
+              let ty_field = (try List.assoc l fields with
+                                Not_found -> raise (Type_error ("label " ^ l ^ " not found in variant type"))) in
+              let ctx'' = addtbinding ctx v ty_field in
+              let ty_br = typeof ctx'' br in
+              
+              if ty_br <> ty_result then
+                raise (Type_error "all branches of case must have the same type")
+            ) (List.tl branches);
+            ty_result
+        | _ -> raise (Type_error "expected a variant type"))
 
 ;;
 
@@ -282,8 +326,14 @@ let rec string_of_term t = (* para pasar de termino a cadena *)
               with Failure _ | Invalid_argument _ -> raise (Type_error ("invalid tuple index: " ^ lbl)))
       | _ ->
           "(" ^ string_of_term t ^ ")." ^ lbl)
+  | TmVariant (l, t, ty) ->
+      "<" ^ l ^ "=" ^ string_of_term t ^ ">"
 
-  
+  | TmCase (t, branches) ->
+      let string_branches = List.map (fun (l, x, t_branch) ->
+        "<" ^ l ^ "=" ^ x ^ "> => " ^ string_of_term t_branch) branches
+      in
+      "case " ^ string_of_term t ^ " of " ^ String.concat " | " string_branches
   
 and string_of_atom t =
   match t with
@@ -348,10 +398,14 @@ let rec free_vars tm = match tm with (* calcula las variables libres de un termi
       List.fold_left lunion [] (List.map free_vars ts)
   | TmRcd fields ->
       List.fold_left lunion [] (List.map (fun (_, t) -> free_vars t) fields)
-
   | TmProj (t, _) ->
       free_vars t
-;;
+  | TmVariant (_, t, _) ->
+      free_vars t
+  | TmCase (t, branches) ->
+      let fv_t = free_vars t in
+      let fv_branches = List.map (fun (l, x, b) -> ldif (free_vars b) [x]) branches in
+      List.fold_left lunion fv_t fv_branches
 
 let rec fresh_name x l =
   if not (List.mem x l) then x else fresh_name (x ^ "'") l
@@ -402,6 +456,18 @@ let rec subst x s tm = match tm with (* sustitucion de variable x por termino s 
       TmRcd (List.map (fun (lbl, t) -> (lbl, subst x s t)) fields)
   | TmProj (t, n) ->
       TmProj (subst x s t, n)
+  | TmVariant (l, t, ty) ->
+      TmVariant (l, subst x s t, ty)
+  | TmCase (t, branches) -> 
+      let new_branches = List.map (fun (l, v, b) ->
+          if v = x then 
+            (l, v, b)
+          else 
+            let z = fresh_name v (free_vars s) in
+            let b' = subst v (TmVar z) b in
+            (l, z, subst x s b')
+      ) branches in
+      TmCase (subst x s t, new_branches)
 ;;
 
 let rec isnumericval tm = match tm with
@@ -418,7 +484,9 @@ let rec isval tm = match tm with
   | TmString _ -> true
   | TmTuple ts -> List.for_all isval ts
   | TmRcd fields -> List.for_all (fun (_, t) -> isval t) fields
+  | TmVariant (l, t, _) -> isval t
   | _ -> false
+
 ;;
 
 exception NoRuleApplies
@@ -501,7 +569,6 @@ let rec eval1 ctx tm = match tm with
       let t1' = eval1 ctx t1 in
       TmFix t1'
 
-    (* E-PROJTUPLE*)
   | TmProj (TmTuple ts, n) ->
       (try List.nth ts ((int_of_string n)-1)
        with Failure _ | Invalid_argument _ -> raise NoRuleApplies)
@@ -510,7 +577,6 @@ let rec eval1 ctx tm = match tm with
   | TmProj (TmRcd fields, lbl) ->
     (try List.assoc lbl fields
      with Not_found -> raise NoRuleApplies)
-
   
     (* E-TUPLE*)
   | TmTuple ts ->
@@ -537,6 +603,35 @@ let rec eval1 ctx tm = match tm with
               TmRcd (List.rev l_evaluados @ ((lbl, h')::t))
       in
       eval_field [] fields
+
+  | TmRcd fields ->
+      let rec eval_field l_evaluados = function
+        | [] -> raise NoRuleApplies 
+        | (lbl, h)::t ->
+            if isval h then
+              eval_field ((lbl, h)::l_evaluados) t
+            else
+              (* Encontrado un no-valor, evalúalo *)
+              let h' = eval1 ctx h in
+              TmRcd (List.rev l_evaluados @ ((lbl, h')::t))
+      in
+      eval_field [] fields
+
+      (* E-VARIANT*)
+  | TmVariant (l, t, ty) when not (isval t) ->
+      TmVariant (l, eval1 ctx t, ty)
+      
+    (* E-CASEVARIANT*)
+  | TmCase (TmVariant (l_val, v, _), branches) when isval v ->
+      (try
+         let (x, b) = List.assoc l_val (List.map (fun (l,x,b) -> (l,(x,b))) branches) in
+         subst x v b
+       with Not_found -> raise NoRuleApplies) 
+
+    (* E-CASE*)
+  | TmCase (t, branches) ->
+      let t' = eval1 ctx t in
+      TmCase (t', branches)
 
     (* E-ConcatStr *)
   | TmConcat (TmString s1, TmString s2) ->
@@ -583,7 +678,8 @@ let execute ctx = function
   | Bind (x, t) ->
       let tyTm = typeof ctx t in
       let tm' = eval ctx t in
-      print_endline (x ^ " = " ^ string_of_term tm' ^ " : " ^ string_of_ty tyTm);
+      let tyTm_resolved = resolve_ty ctx tyTm [] in
+      print_endline (x ^ " : " ^ string_of_ty tyTm_resolved ^ " = " ^ string_of_term tm');
       addvbinding ctx x tyTm tm'
   | BindTy (s, ty) ->
       (try

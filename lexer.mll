@@ -31,6 +31,13 @@ rule token = parse
   | ','         { COMMA }
   | '#'        { HASH }
   | '.'         { DOT }
+  | '<'         { LT }
+  | '>'         { GT }
+  | '|'        { PIPE }
+  | "as"      { AS }
+  | "case"    { CASE }
+  | "of"      { OF }
+  | "=>"     { DARROW }
   | '='         { EQ }
   | ':'         { COLON }
   | "->"        { ARROW }

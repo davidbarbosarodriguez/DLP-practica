@@ -20,6 +20,13 @@
 %token RBRACE
 %token COMMA
 %token HASH
+%token LT
+%token GT
+%token PIPE
+%token AS
+%token CASE
+%token OF
+%token DARROW
 %token BOOL
 %token NAT
 %token STRING
@@ -64,6 +71,8 @@ term :
       { TmLetIn ($2, $4, $6) }
   | LETREC IDV COLON ty EQ term IN term 
       { TmLetIn ($2, TmFix (TmAbs ($2, $4, $6)), $8) }
+  | CASE term OF case_branches_rev 
+      { TmCase ($2, List.rev $4) }
 
 
 appTerm :
@@ -108,11 +117,15 @@ atomicTerm :
       { TmProj ($1, $3) }
   | atomicTerm DOT INTV
       { TmProj ($1, string_of_int $3) }
+  | LT IDV EQ term GT AS ty
+      { TmVariant ($2, $4, $7) }
+
+
 ty :
     atomicTy
       { $1 }
   | atomicTy ARROW ty 
-      { TyArr ($1, $3) }
+      { TyArr ($1, $3) }  
 
 atomicTy :
     LPAREN ty RPAREN 
@@ -129,6 +142,9 @@ atomicTy :
       { TyTuple (List.rev $2) }
   | LBRACE ty_reg_list RBRACE
       { TyRcd (List.rev $2) }
+  | LT ty_field_list_rev GT
+      { TyVariant (List.rev $2) }
+      
 
  
 term_reg_list:
@@ -141,6 +157,7 @@ ty_reg_list:
   | ty_reg_list COMMA IDV COLON ty      { ($3, $5) :: $1 }
 
 
+  
 
 term_list_rev :
       term
@@ -153,3 +170,23 @@ ty_list_rev :
         { [$1] }
     | ty_list_rev COMMA ty
         { $3 :: $1 }
+
+case_branches_rev :
+      case_branch
+        { [$1] }
+    | case_branches_rev PIPE case_branch
+        { $3 :: $1 }
+
+case_branch :
+    LT IDV EQ IDV GT DARROW term
+      { ($2, $4, $7) }
+
+ty_field_list_rev :
+    ty_field
+      { [$1] }
+  | ty_field_list_rev COMMA ty_field
+      { $3 :: $1 }
+
+ty_field :
+    IDV COLON ty
+      { ($1, $3) }

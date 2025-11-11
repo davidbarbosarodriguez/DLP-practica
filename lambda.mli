@@ -5,7 +5,8 @@ type ty =
   | TyString
   | TyVar of string
   | TyTuple of ty list
-  | TyRcd of (string * ty) list        (* <--- Nuevo: tipo de registro *)
+  | TyRcd of (string * ty) list        
+  | TyVariant of (string * ty) list
 ;;
 
 type term =
@@ -24,9 +25,10 @@ type term =
   | TmString of string
   | TmConcat of term * term
   | TmTuple of term list
-  | TmRcd of (string * term) list
   | TmProj of term * string
-
+  | TmRcd of (string * term) list
+  | TmVariant of string * term * ty
+  | TmCase of term * (string * string * term) list
 ;;
 
 type command =
