@@ -84,27 +84,28 @@ term :
 
 
 appTerm :
-    atomicTerm      
+    auxiliaryTerm      
       { $1 }
-  | SUCC atomicTerm 
+  | SUCC auxiliaryTerm 
       { TmSucc $2 }
-  | PRED atomicTerm 
+  | PRED auxiliaryTerm 
       { TmPred $2 }
-  | ISZERO atomicTerm 
+  | ISZERO auxiliaryTerm 
       { TmIsZero $2 }
-  | CONCAT atomicTerm atomicTerm
+  | CONCAT auxiliaryTerm auxiliaryTerm
       { TmConcat ($2, $3) }
   | NIL LBRACKET ty RBRACKET
       { TmNil $3 }
-  | CONS LBRACKET ty RBRACKET atomicTerm atomicTerm
+  | CONS LBRACKET ty RBRACKET auxiliaryTerm auxiliaryTerm
       { TmCons ($3, $5, $6) }
-  | ISNIL LBRACKET ty RBRACKET atomicTerm
+  | ISNIL LBRACKET ty RBRACKET auxiliaryTerm
       { TmIsNil ($3, $5) }
-  | HEAD LBRACKET ty RBRACKET atomicTerm
+  | HEAD LBRACKET ty RBRACKET auxiliaryTerm
       { TmHead ($3, $5) }
-  | TAIL LBRACKET ty RBRACKET atomicTerm
+  | TAIL LBRACKET ty RBRACKET auxiliaryTerm
       { TmTail ($3, $5) }
-  | appTerm atomicTerm  
+  | appTerm auxiliaryTerm  
+  | appTerm auxiliaryTerm  
       { TmApp ($1, $2) }
 
 
@@ -131,19 +132,26 @@ atomicTerm :
   |LBRACE term_list_rev RBRACE
       { TmTuple (List.rev $2) }
 
+
+
+
+  | LT IDV EQ term GT AS ty
+      { TmVariant ($2, $4, $7) }
+
+auxiliaryTerm:
+    atomicTerm { $1 }
+    
   | atomicTerm DOT IDV
       { TmProj ($1, $3) }
   | atomicTerm DOT INTV
       { TmProj ($1, string_of_int $3) }
-  | LT IDV EQ term GT AS ty
-      { TmVariant ($2, $4, $7) }
-
 
 ty :
     atomicTy
       { $1 }
   | atomicTy ARROW ty 
       { TyArr ($1, $3) }  
+
 
 atomicTy :
     LPAREN ty RPAREN 

@@ -91,3 +91,48 @@ add_nat =
       else
         cons [Nat] (f (head [Nat] l)) (map_nat f (tail [Nat] l))
   in map_nat;;
+abs = L i : Int.
+case i of
+<pos=p> => (<pos=p> as Int)
+| <neg=n> => (<pos=n> as Int);;
+
+
+Int = <pos:Nat, zero:Bool, neg:Nat>;;
+
+p3 = <pos=3> as Int;;
+n3 = <neg=3> as Int;;
+n5 = <neg=5> as Int;;
+z0 = <zero=true> as Int;;
+
+p7 = <pos=3> as Int;;
+
+
+add = letrec add : Int -> Int -> Int =
+  L i1 : Int.
+  L i2 : Int.
+    case i1 of
+      <zero=z> => i2
+    | <pos=p1> =>(
+        case i2 of
+          <zero=z> => i1
+        | <pos=p2> =>
+            if iszero p1 then i2
+            else add (<pos=pred p1> as Int) (<pos=succ p2> as Int)
+        | <neg=n2> =>
+            if iszero p1 then i2
+            else if iszero n2 then i1
+            else add (<pos=pred p1> as Int) (<neg=pred n2> as Int))
+    | <neg=n1> =>(
+        case i2 of
+          <zero=z> => i1
+        | <pos=p2> =>
+            if iszero n1 then i2
+            else if iszero p2 then i1
+            else add (<neg=pred n1> as Int) (<pos=pred p2> as Int)
+        | <neg=n2> =>
+            if iszero n1 then i2
+            else add (<neg=pred n1> as Int) (<neg=succ n2> as Int))
+in add;;
+
+
+
