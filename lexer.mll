@@ -26,6 +26,8 @@ rule token = parse
   | "concat"    { CONCAT } 
   | '('         { LPAREN }
   | ')'         { RPAREN }
+  | '['         { LBRACKET }
+  | ']'         { RBRACKET }
   | '{'         { LBRACE }
   | '}'         { RBRACE }
   | ','         { COMMA }
@@ -38,6 +40,12 @@ rule token = parse
   | "case"    { CASE }
   | "of"      { OF }
   | "=>"     { DARROW }
+  | "List"    { LIST }
+  | "nil"     { NIL }
+  | "cons"    { CONS }
+  | "isnil"   { ISNIL }
+  | "head"    { HEAD }
+  | "tail"    { TAIL }
   | '='         { EQ }
   | ':'         { COLON }
   | "->"        { ARROW }

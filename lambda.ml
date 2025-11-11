@@ -9,6 +9,7 @@ type ty =
   | TyTuple of ty list
   | TyRcd of (string * ty) list
   | TyVariant of (string * ty) list
+  | TyList of ty
 ;;
 
 
@@ -32,6 +33,11 @@ type term =
   | TmRcd of (string * term) list
   | TmVariant of string * term * ty
   | TmCase of term * (string * string * term) list
+  | TmNil of ty
+  | TmCons of ty * term * term
+  | TmIsNil of ty * term
+  | TmHead of ty * term
+  | TmTail of ty * term
 ;;
 
 
@@ -104,6 +110,8 @@ let rec string_of_ty ty =
   | TyVariant fields -> 
       let s_fields = List.map (fun (l, ty) -> l ^ ":" ^ string_of_ty ty) fields in
       "<" ^ (String.concat ", " s_fields) ^ ">"
+  | TyList ty_elem ->
+      "List " ^ string_of_ty ty_elem
   
 ;;
 
@@ -133,6 +141,8 @@ let rec resolve_ty ctx ty seen_aliases = match ty with
       TyRcd resolved_fields
   | TyVariant fields ->
       TyVariant (List.map (fun (l, t) -> (l, resolve_ty ctx t seen_aliases)) fields)
+  | TyList ty ->
+      TyList (resolve_ty ctx ty seen_aliases)
   | (TyBool | TyNat | TyString) as t -> t
 ;;
 
@@ -274,6 +284,44 @@ let rec typeof ctx tm = match tm with (* conversiones a tipos todas siguen la ru
             ) (List.tl branches);
             ty_result
         | _ -> raise (Type_error "expected a variant type"))
+  (* T-NIL *)
+  | TmNil ty ->
+      TyList (resolve_ty ctx ty [])
+      
+  (* T-CONS *)
+  | TmCons (ty, t1, t2) ->
+      let ty' = resolve_ty ctx ty [] in
+      let tyT1 = typeof ctx t1 in
+      let tyT2 = typeof ctx t2 in
+      if (resolve_ty ctx tyT1 []) <> ty' then
+        raise (Type_error "tipo de la cabeza de la lista incorrecto");
+      if (resolve_ty ctx tyT2 []) <> TyList ty' then
+        raise (Type_error "tipo de la cola de la lista incorrecto");
+      TyList ty'
+
+  (* T-ISNIL *)
+  | TmIsNil (ty, t) ->
+      let ty' = resolve_ty ctx ty [] in
+      let tyT = typeof ctx t in
+      if (resolve_ty ctx tyT []) <> TyList ty' then
+        raise (Type_error "isnil se aplica sobre un tipo no-lista");
+      TyBool
+
+  (* T-HEAD *)
+  | TmHead (ty, t) ->
+      let ty' = resolve_ty ctx ty [] in
+      let tyT = typeof ctx t in
+      if (resolve_ty ctx tyT []) <> TyList ty' then
+        raise (Type_error "head se aplica sobre un tipo no-lista");
+      ty' (* Devuelve el tipo del elemento *)
+
+  (* T-TAIL *)
+  | TmTail (ty, t) ->
+      let ty' = resolve_ty ctx ty [] in
+      let tyT = typeof ctx t in
+      if (resolve_ty ctx tyT []) <> TyList ty' then
+        raise (Type_error "tail se aplica sobre un tipo no-lista");
+      TyList ty' (* Devuelve el tipo de la lista *)
 
 ;;
 
@@ -334,6 +382,16 @@ let rec string_of_term t = (* para pasar de termino a cadena *)
         "<" ^ l ^ "=" ^ x ^ "> => " ^ string_of_term t_branch) branches
       in
       "case " ^ string_of_term t ^ " of " ^ String.concat " | " string_branches
+  | TmNil ty ->
+      "nil [" ^ string_of_ty ty ^ "]"
+  | TmCons (ty, t1, t2) ->
+      "(cons [" ^ string_of_ty ty ^ "] " ^ string_of_atom t1 ^ " " ^ string_of_atom t2 ^ ")"
+  | TmIsNil (ty, t) ->
+      "isnil [" ^ string_of_ty ty ^ "] " ^ string_of_atom t
+  | TmHead (ty, t) ->
+      "head [" ^ string_of_ty ty ^ "] " ^ string_of_atom t
+  | TmTail (ty, t) ->
+      "tail [" ^ string_of_ty ty ^ "] " ^ string_of_atom t
   
 and string_of_atom t =
   match t with
@@ -406,6 +464,16 @@ let rec free_vars tm = match tm with (* calcula las variables libres de un termi
       let fv_t = free_vars t in
       let fv_branches = List.map (fun (l, x, b) -> ldif (free_vars b) [x]) branches in
       List.fold_left lunion fv_t fv_branches
+  | TmNil _ ->
+      []
+  | TmCons (_, t1, t2) ->
+      lunion (free_vars t1) (free_vars t2)
+  | TmIsNil (_, t) ->
+      free_vars t
+  | TmHead (_, t) ->
+      free_vars t
+  | TmTail (_, t) ->
+      free_vars t
 
 let rec fresh_name x l =
   if not (List.mem x l) then x else fresh_name (x ^ "'") l
@@ -468,6 +536,16 @@ let rec subst x s tm = match tm with (* sustitucion de variable x por termino s 
             (l, z, subst x s b')
       ) branches in
       TmCase (subst x s t, new_branches)
+  | TmNil ty ->
+      TmNil ty
+  | TmCons (ty, t1, t2) ->
+      TmCons (ty, subst x s t1, subst x s t2)
+  | TmIsNil (ty, t) ->
+      TmIsNil (ty, subst x s t)
+  | TmHead (ty, t) ->
+      TmHead (ty, subst x s t)
+  | TmTail (ty, t) ->
+      TmTail (ty, subst x s t)
 ;;
 
 let rec isnumericval tm = match tm with
@@ -485,6 +563,10 @@ let rec isval tm = match tm with
   | TmTuple ts -> List.for_all isval ts
   | TmRcd fields -> List.for_all (fun (_, t) -> isval t) fields
   | TmVariant (l, t, _) -> isval t
+  | TmNil _ ->
+      true
+  | TmCons (_, v1, v2) ->
+      isval v1 && isval v2
   | _ -> false
 
 ;;
@@ -634,6 +716,41 @@ let rec eval1 ctx tm = match tm with
       let t1' = eval1 ctx t1 in
       TmConcat (t1', t2)
 
+  (* E-CONS1 (Evalúa cabeza) *)
+  | TmCons (ty, t1, t2) when not (isval t1) ->
+      TmCons (ty, eval1 ctx t1, t2)
+  (* E-CONS2 (Evalúa cola) *)
+  | TmCons (ty, v1, t2) when isval v1 && not (isval t2) ->
+      TmCons (ty, v1, eval1 ctx t2)
+
+  (* E-ISNILNIL *)
+  | TmIsNil (ty, TmNil _) ->
+      TmTrue
+  (* E-ISNILCONS *)
+  | TmIsNil (ty, TmCons(_, _, _)) ->
+      TmFalse
+  (* E-ISNIL (Congruencia) *)
+  | TmIsNil (ty, t) ->
+      TmIsNil (ty, eval1 ctx t)
+  (* E-HEADCONS *)
+  | TmHead (ty, TmCons(_, v1, _)) ->
+      v1
+    (* E-HEADNIL *)
+  | TmHead (ty, TmNil _) ->
+      raise NoRuleApplies 
+    (* E-HEAD (Congruencia) *)
+  | TmHead (ty, t) ->
+      TmHead (ty, eval1 ctx t)
+
+    (* E-TAILCONS *)
+  | TmTail (ty, TmCons(_, _, v2)) ->
+      v2
+    (* E-TAILNIL *)
+  | TmTail (ty, TmNil _) ->
+      raise NoRuleApplies 
+    (* E-TAIL (Congruencia) *)
+  | TmTail (ty, t) ->
+      TmTail (ty, eval1 ctx t)
   | TmVar s ->
       getvbinding ctx s
 

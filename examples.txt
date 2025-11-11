@@ -36,7 +36,58 @@ case i of
 | <zero=z> => (<zero=true> as Int)
 | <neg=n> => (<pos=n> as Int);;
 
-abs = L i : Int.
-case i of
-<pos=p> => (<pos=p> as Int)
-| <neg=n> => (<pos=n> as Int);;
+
+
+
+
+
+LISTAS
+
+
+
+l1 = cons [Nat] 10 (nil [Nat]);;
+nil [Nat];;
+cons [Nat] (succ 1) (nil [Nat]);;
+isnil [Nat] (nil [Nat]);;
+isnil [Nat] l1;;
+head [Nat] l1;;
+head [Nat] (nil [Nat]);;
+tail [Nat] l1;;
+tail [Nat] (nil [Nat]);;
+
+
+l3 = cons [Nat] 5 (cons [Nat] 10 (cons [Nat] 20 (nil [Nat])));;
+l2 = cons [Nat] 1 (cons [Nat] 2 (nil [Nat]));;
+
+add_nat = 
+  letrec add : Nat -> Nat -> Nat = 
+    lambda n: Nat. lambda m: Nat. 
+      if iszero n then m else succ (add (pred n) m)
+  in add;;
+
+  length =
+  letrec len : List Nat -> Nat =
+    lambda l: List Nat.
+      if isnil [Nat] l then
+        0
+      else
+        add_nat 1 (len (tail [Nat] l))
+  in len;;
+
+  append =
+  letrec app : List Nat -> List Nat -> List Nat =
+    lambda l1: List Nat. lambda l2: List Nat.
+      if isnil [Nat] l1 then
+        l2
+      else
+        cons [Nat] (head [Nat] l1) (app (tail [Nat] l1) l2)
+  in app;;
+
+  map =
+  letrec map_nat : (Nat -> Nat) -> List Nat -> List Nat =
+    lambda f: (Nat -> Nat). lambda l: List Nat.
+      if isnil [Nat] l then
+        nil [Nat]
+      else
+        cons [Nat] (f (head [Nat] l)) (map_nat f (tail [Nat] l))
+  in map_nat;;

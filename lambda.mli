@@ -7,6 +7,7 @@ type ty =
   | TyTuple of ty list
   | TyRcd of (string * ty) list        
   | TyVariant of (string * ty) list
+  | TyList of ty
 ;;
 
 type term =
@@ -29,6 +30,11 @@ type term =
   | TmRcd of (string * term) list
   | TmVariant of string * term * ty
   | TmCase of term * (string * string * term) list
+  | TmNil of ty
+  | TmCons of ty * term * term 
+  | TmIsNil of ty * term
+  | TmHead of ty * term
+  | TmTail of ty * term
 ;;
 
 type command =

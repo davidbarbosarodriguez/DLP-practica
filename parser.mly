@@ -27,6 +27,14 @@
 %token CASE
 %token OF
 %token DARROW
+%token LBRACKET
+%token RBRACKET
+%token LIST
+%token NIL
+%token CONS
+%token ISNIL
+%token HEAD
+%token TAIL
 %token BOOL
 %token NAT
 %token STRING
@@ -86,6 +94,16 @@ appTerm :
       { TmIsZero $2 }
   | CONCAT atomicTerm atomicTerm
       { TmConcat ($2, $3) }
+  | NIL LBRACKET ty RBRACKET
+      { TmNil $3 }
+  | CONS LBRACKET ty RBRACKET atomicTerm atomicTerm
+      { TmCons ($3, $5, $6) }
+  | ISNIL LBRACKET ty RBRACKET atomicTerm
+      { TmIsNil ($3, $5) }
+  | HEAD LBRACKET ty RBRACKET atomicTerm
+      { TmHead ($3, $5) }
+  | TAIL LBRACKET ty RBRACKET atomicTerm
+      { TmTail ($3, $5) }
   | appTerm atomicTerm  
       { TmApp ($1, $2) }
 
@@ -144,6 +162,8 @@ atomicTy :
       { TyRcd (List.rev $2) }
   | LT ty_field_list_rev GT
       { TyVariant (List.rev $2) }
+  | LIST atomicTy
+      { TyList $2 }
       
 
  
