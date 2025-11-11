@@ -7,6 +7,7 @@ type ty =
   | TyString 
   | TyVar of string
   | TyTuple of ty list
+  | TyRcd of (string * ty) list
 ;;
 
 
@@ -26,13 +27,14 @@ type term =
   | TmString of string
   | TmConcat of term * term
   | TmTuple of term list
-  | TmProj of term * int
+  | TmRcd of (string * term) list
+  | TmProj of term * string
 ;;
 
 
 
 type command =
-    Bind of string * term (* x = t *)
+    Bind of string * term (* x = t *) 
   | BindTy of string * ty (* x = T *)
   | Eval of term (* evalua t *)
   | Quit (* quit *)
@@ -91,11 +93,17 @@ let rec string_of_ty ty =
       in
       let s2 = string_of_ty ty2 in
       s1 ^ " -> " ^ s2
+  | TyTuple tys ->
+      "{" ^ (String.concat " , " (List.map string_of_ty tys)) ^ "}"
+  | TyRcd fields ->
+      let field_strings = List.map (fun (label, ty) -> label ^ ": " ^ string_of_ty ty) fields in
+      "{" ^ (String.concat " , " field_strings) ^ "}"
 ;;
 
 
 exception Type_error of string
 ;;
+
 exception Type_alias_loop of string
 ;;
 
@@ -113,6 +121,10 @@ let rec resolve_ty ctx ty seen_aliases = match ty with
       TyArr (resolve_ty ctx t1 seen_aliases, resolve_ty ctx t2 seen_aliases)
   | TyTuple tys ->
       TyTuple (List.map (fun t -> resolve_ty ctx t seen_aliases) tys)
+  | TyRcd fields ->
+      let resolved_fields = List.map (fun (label, ty_field) -> (label, resolve_ty ctx ty_field seen_aliases)) fields in
+      TyRcd resolved_fields
+
   | (TyBool | TyNat | TyString) as t -> t
 ;;
 
@@ -155,9 +167,8 @@ let rec typeof ctx tm = match tm with (* conversiones a tipos todas siguen la ru
       else raise (Type_error "argument of iszero is not a number")
 
     (* T-Var *)
-  | TmVar x ->
-      (try gettbinding ctx x with
-       _ -> raise (Type_error ("no binding type for variable " ^ x)))
+  | TmVar x -> gettbinding ctx x (*que hace el try with *)
+
 
     (* T-Abs *)
   | TmAbs (x, tyT1, t2) ->
@@ -204,12 +215,22 @@ let rec typeof ctx tm = match tm with (* conversiones a tipos todas siguen la ru
   | TmTuple ts ->
       TyTuple (List.map (typeof ctx) ts)
     (* T-Proj *)
-  | TmProj (t, n) ->
+  | TmRcd fields ->
+      let field_types = List.map (fun (lbl, term_field) -> (lbl, typeof ctx term_field)) fields in
+      TyRcd field_types
+
+  | TmProj (t, lbl) ->
       (match (resolve_ty ctx (typeof ctx t) []) with
-        TyTuple tys ->
-          (try List.nth tys (n - 1) with
-            Failure _ -> raise (Type_error "projection index out of bounds"))
-        | _ -> raise (Type_error "argument of projection is not a tuple"))
+        | TyRcd fields ->
+            (try List.assoc lbl fields
+             with Not_found -> raise (Type_error ("label "^lbl^" not found in record")))
+        | TyTuple tys ->
+            (try
+              let index = int_of_string lbl in
+              List.nth tys (index-1)
+             with Failure _ | Invalid_argument _ -> raise (Type_error ("invalid tuple index: " ^ lbl)))
+        | _ -> raise (Type_error "argument of projection is not a record"))
+
 ;;
 
 
@@ -246,8 +267,23 @@ let rec string_of_term t = (* para pasar de termino a cadena *)
       "concat(" ^ string_of_term t1 ^ ", " ^ string_of_term t2 ^ ")"
   | TmTuple ts ->
       "{" ^ (String.concat ", " (List.map string_of_term ts)) ^ "}"
-  | TmProj (t, n) ->
-      string_of_atom t ^ "#" ^ string_of_int n
+  | TmRcd fields ->
+      let field_strings =
+        List.map (fun (lbl, t) -> lbl ^ " = " ^ string_of_term t) fields
+      in
+      "{" ^ (String.concat ", " field_strings) ^ "}"
+  | TmProj (t, lbl) ->
+      (match t with
+      | TmRcd fields ->
+          (try string_of_term (List.assoc lbl fields)
+            with Not_found -> raise (Type_error ("label "^lbl^" not found in record")))
+        | TmTuple ts ->
+            (try string_of_term (List.nth ts (int_of_string lbl - 1))
+              with Failure _ | Invalid_argument _ -> raise (Type_error ("invalid tuple index: " ^ lbl)))
+      | _ ->
+          "(" ^ string_of_term t ^ ")." ^ lbl)
+
+  
   
 and string_of_atom t =
   match t with
@@ -310,6 +346,9 @@ let rec free_vars tm = match tm with (* calcula las variables libres de un termi
       lunion (free_vars t1) (free_vars t2)
   | TmTuple ts ->
       List.fold_left lunion [] (List.map free_vars ts)
+  | TmRcd fields ->
+      List.fold_left lunion [] (List.map (fun (_, t) -> free_vars t) fields)
+
   | TmProj (t, _) ->
       free_vars t
 ;;
@@ -359,6 +398,8 @@ let rec subst x s tm = match tm with (* sustitucion de variable x por termino s 
       TmConcat (subst x s t1, subst x s t2)
   | TmTuple ts ->
       TmTuple (List.map (subst x s) ts)
+  | TmRcd fields ->
+      TmRcd (List.map (fun (lbl, t) -> (lbl, subst x s t)) fields)
   | TmProj (t, n) ->
       TmProj (subst x s t, n)
 ;;
@@ -376,6 +417,7 @@ let rec isval tm = match tm with
   | t when isnumericval t -> true
   | TmString _ -> true
   | TmTuple ts -> List.for_all isval ts
+  | TmRcd fields -> List.for_all (fun (_, t) -> isval t) fields
   | _ -> false
 ;;
 
@@ -460,14 +502,15 @@ let rec eval1 ctx tm = match tm with
       TmFix t1'
 
     (* E-PROJTUPLE*)
-  | TmProj (TmTuple ts, n) when isval (TmTuple ts) ->
-      (try List.nth ts (n - 1) with
-        Failure _ -> raise NoRuleApplies)
+  | TmProj (TmTuple ts, n) ->
+      (try List.nth ts ((int_of_string n)-1)
+       with Failure _ | Invalid_argument _ -> raise NoRuleApplies)
   
     (* E-PROJ *)
-  | TmProj(t, n) ->
-      let t' = eval1 ctx t in
-      TmProj(t', n)
+  | TmProj (TmRcd fields, lbl) ->
+    (try List.assoc lbl fields
+     with Not_found -> raise NoRuleApplies)
+
   
     (* E-TUPLE*)
   | TmTuple ts ->
@@ -482,6 +525,18 @@ let rec eval1 ctx tm = match tm with
               TmTuple(List.rev l_evaluados @ (h'::t))
       in
       eval_step [] ts
+  | TmRcd fields ->
+      let rec eval_field l_evaluados = function
+        | [] -> raise NoRuleApplies 
+        | (lbl, h)::t ->
+            if isval h then
+              eval_field ((lbl, h)::l_evaluados) t
+            else
+              (* Encontrado un no-valor, evalúalo *)
+              let h' = eval1 ctx h in
+              TmRcd (List.rev l_evaluados @ ((lbl, h')::t))
+      in
+      eval_field [] fields
 
     (* E-ConcatStr *)
   | TmConcat (TmString s1, TmString s2) ->

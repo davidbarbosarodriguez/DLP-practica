@@ -97,12 +97,17 @@ atomicTerm :
         in f $1 }
   | STRINGV
       { TmString $1 }
-  | LBRACE term_list_rev RBRACE
+      
+  |LBRACE term_reg_list RBRACE
+      {TmRcd (List.rev $2) }
+
+  |LBRACE term_list_rev RBRACE
       { TmTuple (List.rev $2) }
-  | atomicTerm HASH INTV
+
+  | atomicTerm DOT IDV
       { TmProj ($1, $3) }
-
-
+  | atomicTerm DOT INTV
+      { TmProj ($1, string_of_int $3) }
 ty :
     atomicTy
       { $1 }
@@ -122,6 +127,20 @@ atomicTy :
       { TyVar $1 }
   | LBRACE ty_list_rev RBRACE
       { TyTuple (List.rev $2) }
+  | LBRACE ty_reg_list RBRACE
+      { TyRcd (List.rev $2) }
+
+ 
+term_reg_list:
+    IDV EQ term                         { [($1, $3)] }
+  | term_reg_list COMMA IDV EQ term     { ($3, $5) :: $1 }
+
+
+ty_reg_list:
+    IDV COLON ty                        { [($1, $3)] }
+  | ty_reg_list COMMA IDV COLON ty      { ($3, $5) :: $1 }
+
+
 
 term_list_rev :
       term

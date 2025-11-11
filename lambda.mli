@@ -1,4 +1,3 @@
-
 type ty =
     TyBool
   | TyNat
@@ -6,8 +5,8 @@ type ty =
   | TyString
   | TyVar of string
   | TyTuple of ty list
+  | TyRcd of (string * ty) list        (* <--- Nuevo: tipo de registro *)
 ;;
-
 
 type term =
     TmTrue
@@ -25,7 +24,9 @@ type term =
   | TmString of string
   | TmConcat of term * term
   | TmTuple of term list
-  | TmProj of term * int
+  | TmRcd of (string * term) list
+  | TmProj of term * string
+
 ;;
 
 type command =
