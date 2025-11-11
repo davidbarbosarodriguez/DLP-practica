@@ -16,6 +16,10 @@
 %token LETREC
 %token IN
 %token CONCAT
+%token LBRACE
+%token RBRACE
+%token COMMA
+%token HASH
 %token BOOL
 %token NAT
 %token STRING
@@ -91,8 +95,12 @@ atomicTerm :
             0 -> TmZero
           | n -> TmSucc (f (n-1))
         in f $1 }
- | STRINGV
+  | STRINGV
       { TmString $1 }
+  | LBRACE term_list_rev RBRACE
+      { TmTuple (List.rev $2) }
+  | atomicTerm HASH INTV
+      { TmProj ($1, $3) }
 
 
 ty :
@@ -112,4 +120,17 @@ atomicTy :
       { TyString }
   | IDV
       { TyVar $1 }
+  | LBRACE ty_list_rev RBRACE
+      { TyTuple (List.rev $2) }
 
+term_list_rev :
+      term
+        { [$1] }
+    | term_list_rev COMMA term
+        { $3 :: $1 }
+
+ty_list_rev :
+      ty
+        { [$1] }
+    | ty_list_rev COMMA ty
+        { $3 :: $1 }

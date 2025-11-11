@@ -6,6 +6,7 @@ type ty =
   | TyArr of ty * ty
   | TyString 
   | TyVar of string
+  | TyTuple of ty list
 ;;
 
 
@@ -24,6 +25,8 @@ type term =
   | TmFix of term
   | TmString of string
   | TmConcat of term * term
+  | TmTuple of term list
+  | TmProj of term * int
 ;;
 
 
@@ -108,6 +111,8 @@ let rec resolve_ty ctx ty seen_aliases = match ty with
   | TyArr (t1, t2) ->
       (* Resolve types in functions *)
       TyArr (resolve_ty ctx t1 seen_aliases, resolve_ty ctx t2 seen_aliases)
+  | TyTuple tys ->
+      TyTuple (List.map (fun t -> resolve_ty ctx t seen_aliases) tys)
   | (TyBool | TyNat | TyString) as t -> t
 ;;
 
@@ -195,7 +200,16 @@ let rec typeof ctx tm = match tm with (* conversiones a tipos todas siguen la ru
         TyString
       else
         raise (Type_error "arguments of concat are not all strings")
-        
+    (* T-Tuple *)
+  | TmTuple ts ->
+      TyTuple (List.map (typeof ctx) ts)
+    (* T-Proj *)
+  | TmProj (t, n) ->
+      (match (resolve_ty ctx (typeof ctx t) []) with
+        TyTuple tys ->
+          (try List.nth tys (n - 1) with
+            Failure _ -> raise (Type_error "projection index out of bounds"))
+        | _ -> raise (Type_error "argument of projection is not a tuple"))
 ;;
 
 
@@ -230,6 +244,10 @@ let rec string_of_term t = (* para pasar de termino a cadena *)
       "\"" ^ s ^ "\""
   | TmConcat (t1, t2) ->
       "concat(" ^ string_of_term t1 ^ ", " ^ string_of_term t2 ^ ")"
+  | TmTuple ts ->
+      "{" ^ (String.concat ", " (List.map string_of_term ts)) ^ "}"
+  | TmProj (t, n) ->
+      string_of_atom t ^ "#" ^ string_of_int n
   
 and string_of_atom t =
   match t with
@@ -290,6 +308,10 @@ let rec free_vars tm = match tm with (* calcula las variables libres de un termi
       []
   | TmConcat (t1, t2) ->
       lunion (free_vars t1) (free_vars t2)
+  | TmTuple ts ->
+      List.fold_left lunion [] (List.map free_vars ts)
+  | TmProj (t, _) ->
+      free_vars t
 ;;
 
 let rec fresh_name x l =
@@ -335,6 +357,10 @@ let rec subst x s tm = match tm with (* sustitucion de variable x por termino s 
       TmString str
   | TmConcat (t1, t2) ->
       TmConcat (subst x s t1, subst x s t2)
+  | TmTuple ts ->
+      TmTuple (List.map (subst x s) ts)
+  | TmProj (t, n) ->
+      TmProj (subst x s t, n)
 ;;
 
 let rec isnumericval tm = match tm with
@@ -349,6 +375,7 @@ let rec isval tm = match tm with
   | TmAbs _ -> true
   | t when isnumericval t -> true
   | TmString _ -> true
+  | TmTuple ts -> List.for_all isval ts
   | _ -> false
 ;;
 
@@ -431,6 +458,31 @@ let rec eval1 ctx tm = match tm with
   | TmFix t1 ->
       let t1' = eval1 ctx t1 in
       TmFix t1'
+
+    (* E-PROJTUPLE*)
+  | TmProj (TmTuple ts, n) when isval (TmTuple ts) ->
+      (try List.nth ts (n - 1) with
+        Failure _ -> raise NoRuleApplies)
+  
+    (* E-PROJ *)
+  | TmProj(t, n) ->
+      let t' = eval1 ctx t in
+      TmProj(t', n)
+  
+    (* E-TUPLE*)
+  | TmTuple ts ->
+      let rec eval_step l_evaluados = function
+        | [] -> raise NoRuleApplies (* Ya es un valor *)
+        | h::t ->
+            if isval h then
+              eval_step (h::l_evaluados) t
+            else
+              (* Encontrado un no-valor, evalúalo *)
+              let h' = eval1 ctx h in
+              TmTuple(List.rev l_evaluados @ (h'::t))
+      in
+      eval_step [] ts
+
     (* E-ConcatStr *)
   | TmConcat (TmString s1, TmString s2) ->
       TmString (s1 ^ s2)

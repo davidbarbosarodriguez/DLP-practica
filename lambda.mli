@@ -5,6 +5,7 @@ type ty =
   | TyArr of ty * ty
   | TyString
   | TyVar of string
+  | TyTuple of ty list
 ;;
 
 
@@ -23,6 +24,8 @@ type term =
   | TmFix of term
   | TmString of string
   | TmConcat of term * term
+  | TmTuple of term list
+  | TmProj of term * int
 ;;
 
 type command =

@@ -26,6 +26,10 @@ rule token = parse
   | "concat"    { CONCAT } 
   | '('         { LPAREN }
   | ')'         { RPAREN }
+  | '{'         { LBRACE }
+  | '}'         { RBRACE }
+  | ','         { COMMA }
+  | '#'        { HASH }
   | '.'         { DOT }
   | '='         { EQ }
   | ':'         { COLON }
