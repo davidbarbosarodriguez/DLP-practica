@@ -105,8 +105,7 @@ appTerm :
   | TAIL LBRACKET ty RBRACKET auxiliaryTerm
       { TmTail ($3, $5) }
   | appTerm auxiliaryTerm  
-  | appTerm auxiliaryTerm  
-      { TmApp ($1, $2) }
+        { TmApp ($1, $2) }
 
 
 atomicTerm :
@@ -131,9 +130,6 @@ atomicTerm :
 
   |LBRACE term_list_rev RBRACE
       { TmTuple (List.rev $2) }
-
-
-
 
   | LT IDV EQ term GT AS ty
       { TmVariant ($2, $4, $7) }

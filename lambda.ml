@@ -322,7 +322,6 @@ let rec typeof ctx tm = match tm with (* conversiones a tipos todas siguen la ru
       if (resolve_ty ctx tyT []) <> TyList ty' then
         raise (Type_error "tail se aplica sobre un tipo no-lista");
       TyList ty' (* Devuelve el tipo de la lista *)
-
 ;;
 
 
@@ -475,6 +474,7 @@ let rec free_vars tm = match tm with (* calcula las variables libres de un termi
   | TmTail (_, t) ->
       free_vars t
 
+
 let rec fresh_name x l =
   if not (List.mem x l) then x else fresh_name (x ^ "'") l
 ;;
@@ -546,6 +546,7 @@ let rec subst x s tm = match tm with (* sustitucion de variable x por termino s 
       TmHead (ty, subst x s t)
   | TmTail (ty, t) ->
       TmTail (ty, subst x s t)
+
 ;;
 
 let rec isnumericval tm = match tm with
@@ -609,6 +610,7 @@ let rec eval1 ctx tm = match tm with
     (* E-IszeroZero *)
   | TmIsZero TmZero ->
       TmTrue
+
 
     (* E-IszeroSucc *)
   | TmIsZero (TmSucc nv1) when isnumericval nv1 ->
@@ -775,16 +777,36 @@ let rec eval ctx tm = (* Llama a la función de eval1 para realicar el evaluatio
 
 let execute ctx = function
   Eval tm ->
-    let tyT = typeof ctx tm in
-    let tm' = eval ctx tm in
-    print_endline (string_of_term tm' ^ " : " ^ string_of_ty tyT);
-      ctx
-  | Bind (x, t) ->
-      let tyTm = typeof ctx t in
-      let tm' = eval ctx t in
-      let tyTm_resolved = resolve_ty ctx tyTm [] in
-      print_endline (x ^ " : " ^ string_of_ty tyTm_resolved ^ " = " ^ string_of_term tm');
-      addvbinding ctx x tyTm tm'
+    (* Si tm es una variable y ya está en el contexto, devuelve solo su tipo *)
+    (match tm with
+     | TmVar x -> 
+         let ty = gettbinding ctx x in
+         print_endline (x ^ " : " ^ string_of_ty ty);
+         ctx
+     | _ ->
+         (* Caso normal: evaluar y mostrar resultado *)
+         let tyT = typeof ctx tm in
+         let tm' = eval ctx tm in
+         print_endline (string_of_term tm' ^ " : " ^ string_of_ty tyT);
+         ctx
+    )
+| Bind (x, t) ->
+    let tyTm, tm' = match t with
+      | TmVar y ->
+          let ty = gettbinding ctx y in       (* siempre obtenemos tipo *)
+          let v = try getvbinding ctx y      (* intentamos valor si existe *)
+                  with Not_found -> TmVar y
+          in
+          (ty, v)
+      | _ ->
+          let ty = typeof ctx t in
+          let v = eval ctx t in
+          (ty, v)
+    in
+    let tyTm_resolved = resolve_ty ctx tyTm [] in
+    print_endline (x ^ " : " ^ string_of_ty tyTm_resolved ^ " = " ^ string_of_term tm');
+    addvbinding ctx x tyTm tm'
+
   | BindTy (s, ty) ->
       (try
         let ty' = resolve_ty ctx ty [] in
