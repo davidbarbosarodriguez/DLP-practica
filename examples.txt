@@ -20,6 +20,40 @@ let fix = lambda f.(lambda x. f (lambda y. x x y)) (lambda x. f (lambda y. x x y
 letrec sum : Nat -> Nat -> Nat = lambda n : Nat. lambda m : Nat. if iszero n then m else succ (sum (pred n) m) in sum 21 34
 
 
+FUNCIONES COMBINADOR PUNTO FIJO INTERNO
+
+add = 
+  letrec add_aux : Nat -> Nat -> Nat =
+    lambda n: Nat. lambda m: Nat.
+      if iszero n then m else succ (add_aux (pred n) m)
+  in add_aux;;
+
+prod =
+  letrec prod_aux : Nat -> Nat -> Nat =
+    lambda n: Nat. lambda m: Nat.
+      if iszero n then 0
+      else add m (prod_aux (pred n) m)
+  in prod_aux;;
+
+
+fib =
+  letrec fib_aux : Nat -> Nat =
+    lambda n: Nat.
+      if iszero n then 0
+      else if iszero (pred n) then 1
+      else add (fib_aux (pred n)) (fib_aux (pred (pred n)))
+  in fib_aux;;
+
+
+fact =
+  letrec fact_aux : Nat -> Nat =
+    lambda n: Nat.
+      if iszero n then 1
+      else prod n (fact_aux (pred n))
+  in fact_aux;;
+
+
+
 t = {true, (lambda x:Nat. succ x) 0};;
 
 Int = <pos:Nat, zero:Bool, neg:Nat>;;
@@ -91,6 +125,10 @@ add_nat =
       else
         cons [Nat] (f (head [Nat] l)) (map_nat f (tail [Nat] l))
   in map_nat;;
+
+
+
+  
 abs = L i : Int.
 case i of
 <pos=p> => (<pos=p> as Int)

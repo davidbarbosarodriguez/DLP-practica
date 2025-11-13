@@ -1,5 +1,4 @@
-mirar si se deberia heredar el tipo de una varible linkada a un tipo
-mirar si se puede dejar el dot en tupal
+
 
 
 
