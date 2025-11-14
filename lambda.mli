@@ -1,3 +1,4 @@
+(*definition of types*)
 type ty =
     TyBool
   | TyNat
@@ -10,6 +11,7 @@ type ty =
   | TyList of ty
 ;;
 
+(*definition of terms*)
 type term =
     TmTrue
   | TmFalse
@@ -49,24 +51,40 @@ type binding =
   | TyTmBind of (ty * term)
 ;;
 
+(*lambda context*)
 type context =
   (string * binding) list
 ;;
 
+(* empty context*)
 val emptyctx : context;;
+
+(*add a type in the context *)
 val addtbinding : context -> string -> ty -> context ;;
+
+(*add a term in the context *)
 val addvbinding : context -> string -> ty -> term -> context ;;
 
+(*get a type from the context *)
 val gettbinding : context -> string -> ty ;;
+
+(*get a term from the context *)
 val getvbinding : context -> string -> term ;;
 
+(*string representation of types*)
 val string_of_ty : ty -> string;;
 exception Type_error of string;;
 exception Type_alias_loop of string;;
 val typeof : context -> term -> ty;;
 
+(*string representation of terms*)
 val string_of_term : term -> string;;
+
+
 exception NoRuleApplies;;
+
+(*evaluation of terms*)
 val eval : context -> term -> term;;
 
+(*execution of commands*)
 val execute : context -> command -> context;;

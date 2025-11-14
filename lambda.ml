@@ -1,5 +1,6 @@
 (* TYPE DEFINITIONS *)
 
+(*types*)
 type ty =
     TyBool
   | TyNat
@@ -11,6 +12,8 @@ type ty =
   | TyVariant of (string * ty) list
   | TyList of ty
 ;;
+
+(*different kind of terms *)
 
 
 type term =
@@ -61,27 +64,30 @@ type context =
 
 
 let emptyctx =
-  []    (* contexto vacio *)
+  []    (*empty context *)
 ;;
 
+ (* add a var and their type to the context *)
 let addtbinding ctx x bind =
-  (x, TyBind bind) :: ctx (* añade una variable y tipo al contexto *)
+  (x, TyBind bind) :: ctx
 ;;
-
+(*get a type of a var in the context*)
 let gettbinding ctx x =
-  match List.assoc x ctx with (* busca x en el contexto *)
-      TyBind ty -> ty (* devuelve el tipo de la variable en caso de que solo haya tipo *)
-    | TyTmBind (ty, _) -> ty (* devuelve el tipo de la variable si tmb hay valor *)
+  match List.assoc x ctx with 
+      TyBind ty -> ty 
+    | TyTmBind (ty, _) -> ty 
 ;;
 
+(*add a value and their type to the context *)
 let addvbinding ctx x ty t =
   (x, TyTmBind (ty, t)) :: ctx (* añade una variable, tipo y termino al contexto *)
 ;;
 
+(*get the value of a varible in the context*)
 let getvbinding ctx x = 
-  match List.assoc x ctx with (* busca x en el contexto *)
-      TyTmBind (_, t) -> t (* devuelve el termino de la variable *)
-    | _ -> raise Not_found (* si no tiene termino asociado lanza error *)
+  match List.assoc x ctx with 
+      TyTmBind (_, t) -> t 
+    | _ -> raise Not_found 
 ;;
 
 
@@ -146,8 +152,8 @@ let rec resolve_ty ctx ty seen_aliases = match ty with
   | (TyBool | TyNat | TyString) as t -> t
 ;;
 
-
-let rec typeof ctx tm = match tm with (* conversiones a tipos todas siguen la rules for typing *)
+(*get the type of a term*)
+let rec typeof ctx tm = match tm with 
     (* T-True *)
     TmTrue ->
       TyBool
@@ -157,7 +163,7 @@ let rec typeof ctx tm = match tm with (* conversiones a tipos todas siguen la ru
       TyBool
 
     (* T-If *)
-  | TmIf (t1, t2, t3) -> (* si es bool comprueba que los dos tengan el mismo tipo y devulve el tipo*)
+  | TmIf (t1, t2, t3) -> (*both parts need to have the same type *)
       if (resolve_ty ctx (typeof ctx t1) []) = TyBool then
         let tyT2 = typeof ctx t2 in
         if (resolve_ty ctx (typeof ctx t3) []) = (resolve_ty ctx tyT2 []) then tyT2
@@ -185,8 +191,7 @@ let rec typeof ctx tm = match tm with (* conversiones a tipos todas siguen la ru
       else raise (Type_error "argument of iszero is not a number")
 
     (* T-Var *)
-  | TmVar x -> gettbinding ctx x (*que hace el try with *)
-
+  | TmVar x -> gettbinding ctx x (*try-with???*)
 
     (* T-Abs *)
   | TmAbs (x, tyT1, t2) ->
@@ -232,18 +237,18 @@ let rec typeof ctx tm = match tm with (* conversiones a tipos todas siguen la ru
     (* T-Tuple *)
   | TmTuple ts ->
       TyTuple (List.map (typeof ctx) ts)
-    (* T-Proj *)
+    (* T-Rcd *)
   | TmRcd fields ->
       let field_types = List.map (fun (lbl, term_field) -> (lbl, typeof ctx term_field)) fields in
       TyRcd field_types
-
+    (*T-Proj*)
   | TmProj (t, lbl) ->
       (match (resolve_ty ctx (typeof ctx t) []) with
         | TyRcd fields ->
-            (try List.assoc lbl fields
+            (try List.assoc lbl fields (*try to find the field in the record*)
              with Not_found -> raise (Type_error ("label "^lbl^" not found in record")))
         | TyTuple tys ->
-            (try
+            (try (*return the n-1 element of the list*)
               let index = int_of_string lbl in
               List.nth tys (index-1)
              with Failure _ | Invalid_argument _ -> raise (Type_error ("invalid tuple index: " ^ lbl)))
@@ -253,7 +258,7 @@ let rec typeof ctx tm = match tm with (* conversiones a tipos todas siguen la ru
   | TmVariant (l, t, ty) ->
       (match (resolve_ty ctx ty []) with
         TyVariant fields ->
-          (try
+          (try (*if the ty expect is the same as the real ty return the ty*)
             let ty_expected = List.assoc l fields in
             let ty_t = typeof ctx t in
             if (resolve_ty ctx ty_t []) = (resolve_ty ctx ty_expected []) then ty
@@ -265,10 +270,10 @@ let rec typeof ctx tm = match tm with (* conversiones a tipos todas siguen la ru
   | TmCase (t, branches) ->
       (match (resolve_ty ctx (typeof ctx t) []) with
         TyVariant fields ->
-            if branches = [] then
+            if branches = [] then (*no cases*)
               raise (Type_error "case expression has no branches");
-            let (first_label, first_var, first_branch) = List.hd branches in
-            let ty_field1 = (try List.assoc first_label fields with
+            let (first_label, first_var, first_branch) = List.hd branches in (*take the first branch*)
+            let ty_field1 = (try List.assoc first_label fields with 
                            Not_found -> raise (Type_error ("label " ^ first_label ^ " not found in variant type"))) in
             let ctx' = addtbinding ctx first_var ty_field1 in
             let ty_result = typeof ctx' first_branch in
@@ -286,10 +291,10 @@ let rec typeof ctx tm = match tm with (* conversiones a tipos todas siguen la ru
         | _ -> raise (Type_error "expected a variant type"))
   (* T-NIL *)
   | TmNil ty ->
-      TyList (resolve_ty ctx ty [])
+      TyList (resolve_ty ctx ty []) (*return the TyList with the simpliest type*)
       
   (* T-CONS *)
-  | TmCons (ty, t1, t2) ->
+  | TmCons (ty, t1, t2) -> (*compare two lists  *)
       let ty' = resolve_ty ctx ty [] in
       let tyT1 = typeof ctx t1 in
       let tyT2 = typeof ctx t2 in
@@ -308,7 +313,7 @@ let rec typeof ctx tm = match tm with (* conversiones a tipos todas siguen la ru
       TyBool
 
   (* T-HEAD *)
-  | TmHead (ty, t) ->
+  | TmHead (ty, t) -> (*return the type of the head of the list*)
       let ty' = resolve_ty ctx ty [] in
       let tyT = typeof ctx t in
       if (resolve_ty ctx tyT []) <> TyList ty' then
@@ -316,7 +321,7 @@ let rec typeof ctx tm = match tm with (* conversiones a tipos todas siguen la ru
       ty' (* Devuelve el tipo del elemento *)
 
   (* T-TAIL *)
-  | TmTail (ty, t) ->
+  | TmTail (ty, t) -> (*return the type of the tail list*)
       let ty' = resolve_ty ctx ty [] in
       let tyT = typeof ctx t in
       if (resolve_ty ctx tyT []) <> TyList ty' then
@@ -412,17 +417,17 @@ and string_of_app t =
 
 
 
-let rec ldif l1 l2 = match l1 with (* devuelve lo que está en l1 pero no en l2  *)
+let rec ldif l1 l2 = match l1 with (* return the elements in l1 but not in l2  *)
     [] -> []
   | h::t -> if List.mem h l2 then ldif t l2 else h::(ldif t l2)
 ;;
 
-let rec lunion l1 l2 = match l1 with (* une dos listas sin repetir elementos *)
+let rec lunion l1 l2 = match l1 with (* return the union of both lists  *)
     [] -> l2
   | h::t -> if List.mem h l2 then lunion t l2 else h::(lunion t l2)
 ;;
 
-let rec free_vars tm = match tm with (* calcula las variables libres de un termino *)
+let rec free_vars tm = match tm with (* return the free vars  of a term *)
     TmTrue ->
       []
   | TmFalse ->
@@ -475,11 +480,11 @@ let rec free_vars tm = match tm with (* calcula las variables libres de un termi
       free_vars t
 
 
-let rec fresh_name x l =
+let rec fresh_name x l = (*return a new name *)
   if not (List.mem x l) then x else fresh_name (x ^ "'") l
 ;;
 
-let rec subst x s tm = match tm with (* sustitucion de variable x por termino s en tm abstraccion *)
+let rec subst x s tm = match tm with (* substitution of a var to their fresh-name *)
     TmTrue ->
       TmTrue
   | TmFalse ->
@@ -549,13 +554,13 @@ let rec subst x s tm = match tm with (* sustitucion de variable x por termino s 
 
 ;;
 
-let rec isnumericval tm = match tm with
+let rec isnumericval tm = match tm with (*check if the var is numeric *)
     TmZero -> true
   | TmSucc t -> isnumericval t
   | _ -> false
 ;;
 
-let rec isval tm = match tm with
+let rec isval tm = match tm with (*check if is a var*)
     TmTrue  -> true
   | TmFalse -> true
   | TmAbs _ -> true
@@ -575,7 +580,8 @@ let rec isval tm = match tm with
 exception NoRuleApplies
 ;;
 
-let rec eval1 ctx tm = match tm with
+(*eval a term*)
+let rec eval1 ctx tm = match tm with 
     (* E-IfTrue *)
     TmIf (TmTrue, t2, _) ->
       t2
@@ -665,12 +671,12 @@ let rec eval1 ctx tm = match tm with
     (* E-TUPLE*)
   | TmTuple ts ->
       let rec eval_step l_evaluados = function
-        | [] -> raise NoRuleApplies (* Ya es un valor *)
+        | [] -> raise NoRuleApplies (* is just a value *)
         | h::t ->
             if isval h then
-              eval_step (h::l_evaluados) t
+              eval_step (h::l_evaluados) t 
             else
-              (* Encontrado un no-valor, evalúalo *)
+              (*  *)
               let h' = eval1 ctx h in
               TmTuple(List.rev l_evaluados @ (h'::t))
       in
@@ -682,7 +688,6 @@ let rec eval1 ctx tm = match tm with
             if isval h then
               eval_field ((lbl, h)::l_evaluados) t
             else
-              (* Encontrado un no-valor, evalúalo *)
               let h' = eval1 ctx h in
               TmRcd (List.rev l_evaluados @ ((lbl, h')::t))
       in
@@ -760,12 +765,12 @@ let rec eval1 ctx tm = match tm with
       raise NoRuleApplies
 ;;
 
-let apply_ctx ctx1 ctx2 = (* se sustituyen las variables libres de ctx1 por sus valores en el contexto ctx2 *)
+let apply_ctx ctx1 ctx2 = 
 List.fold_left (fun t x -> subst x (getvbinding ctx2 x) t ) ctx1 (free_vars ctx1)
 ;;
 
 
-let rec eval ctx tm = (* Llama a la función de eval1 para realicar el evaluation*)
+let rec eval ctx tm = (* LCalls eval1 function*)
   try
     let tm' = eval1 ctx tm in
     eval ctx tm'
@@ -777,14 +782,14 @@ let rec eval ctx tm = (* Llama a la función de eval1 para realicar el evaluatio
 
 let execute ctx = function
   Eval tm ->
-    (* Si tm es una variable y ya está en el contexto, devuelve solo su tipo *)
+    (* if tm is a variable and is in the context, return the type *)
     (match tm with
      | TmVar x -> 
          let ty = gettbinding ctx x in
          print_endline (x ^ " : " ^ string_of_ty ty);
          ctx
      | _ ->
-         (* Caso normal: evaluar y mostrar resultado *)
+         (* eval and show results*)
          let tyT = typeof ctx tm in
          let tm' = eval ctx tm in
          print_endline (string_of_term tm' ^ " : " ^ string_of_ty tyT);
@@ -792,24 +797,26 @@ let execute ctx = function
     )
 | Bind (x, t) ->
     let tyTm, tm' = match t with
+      (* when is a variable, return the value if is in the context *)
       | TmVar y ->
-          let ty = gettbinding ctx y in       (* siempre obtenemos tipo *)
-          let v = try getvbinding ctx y      (* intentamos valor si existe *)
+          let ty = gettbinding ctx y in       
+          let v = try getvbinding ctx y      
                   with Not_found -> TmVar y
           in
           (ty, v)
+      (*when is a function, eval *)
       | _ ->
           let ty = typeof ctx t in
           let v = eval ctx t in
           (ty, v)
     in
-    let tyTm_resolved = resolve_ty ctx tyTm [] in
+    let tyTm_resolved = resolve_ty ctx tyTm [] in (*take the simpliest type of a function/var*)
     print_endline (x ^ " : " ^ string_of_ty tyTm_resolved ^ " = " ^ string_of_term tm');
-    addvbinding ctx x tyTm tm'
+    addvbinding ctx x tyTm tm'(*add it to the context*)
 
   | BindTy (s, ty) ->
       (try
-        let ty' = resolve_ty ctx ty [] in
+        let ty' = resolve_ty ctx ty [] in (*take the simpliest type of a function/var*)
         print_endline (s ^ " = " ^ string_of_ty ty');
         addtbinding ctx s ty'
       with

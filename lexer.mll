@@ -4,6 +4,7 @@
   exception Lexical_error;;
 }
 
+(* Definition of tokens *)
 rule token = parse
     [' ' '\t']  { token lexbuf }
   | "lambda"    { LAMBDA }
