@@ -14,8 +14,6 @@ type ty =
 ;;
 
 (*different kind of terms *)
-
-
 type term =
     TmTrue
   | TmFalse
@@ -179,26 +177,6 @@ let rec subtype ctx tyS tyT =
     | (TyArr(s1, s2), TyArr(t1, t2)) ->
         (* Contravarianza en el argumento (T1 <: S1) y Covarianza en resultado (S2 <: T2) *)
         (subtype ctx t1 s1) && (subtype ctx s2 t2)
-
-    (* S-Tuple: Similar a registros pero por posición (Depth) *)
-    | (TyTuple tysS, TyTuple tysT) ->
-        if List.length tysS <> List.length tysT then false (* Deben tener mismo tamaño *)
-        else List.for_all2 (fun s t -> subtype ctx s t) tysS tysT
-
-    (* S-Variant: (Opcional pero recomendado) Variantes *)
-    (* Una variante es subtipo si tiene MENOS opciones que la supertipo (puede ser gestionada por el supertipo) *)
-    | (TyVariant fieldsS, TyVariant fieldsT) ->
-        List.for_all (fun (l, tyS_field) ->
-          try
-            let tyT_field = List.assoc l fieldsT in
-            subtype ctx tyS_field tyT_field
-          with Not_found -> false (* S tiene una etiqueta que T no conoce -> Error *)
-        ) fieldsS
-    
-    (* S-List: Listas (Covarianza simple) *)
-    | (TyList tyS_elem, TyList tyT_elem) ->
-        subtype ctx tyS_elem tyT_elem
-
     | _ -> false
 ;;
 

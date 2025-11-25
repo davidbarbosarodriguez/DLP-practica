@@ -1,97 +1,117 @@
-# EXERCISES AND EXAMPLES
+# Exercises and Examples
 
-## Basic examples
+## Basic Examples
 
+```ocaml
+true
+let x = true in x
+if false then true else false
+0
+succ (succ (succ 0))
+3
+succ (pred 0)
+iszero (pred (succ (succ 0)))
+if iszero 3 then 0 else 1
+iszero true
+if 1 then true else false
+if iszero 3 then 0 else false
+let id = Lx.x in id 3
+let id_bool = L x:Bool. x in id_bool true
+let id_nat = L x:Nat. x in id_nat 5
+let x = 5 in let id_nat = L x:Nat. x in id_nat x
+let fix = lambda f.(lambda x. f (lambda y. x x y)) (lambda x. f (lambda y. x x y)) in
+  let sumaux = lambda f. (lambda n. (lambda m. if (iszero n) then m else succ (f (pred n) m))) in
+  let sum = fix sumaux in sum 21 34
+let fix = lambda f.(lambda x. f (lambda y. x x y)) (lambda x. f (lambda y. x x y)) in
+  let sumaux = lambda f. (lambda n. (lambda m. if (iszero n) then m else succ (f (pred n) m))) in
+  let sum = fix sumaux in
+  let prodaux = lambda f. (lambda n. (lambda m. if (iszero m) then 0 else sum n (f n (pred m)))) in
+  let prod = fix prodaux in prod 12 5
+letrec sum : Nat -> Nat -> Nat = lambda n : Nat. lambda m : Nat.
+  if iszero n then m else succ (sum (pred n) m) in sum 21 34
+```
 
-true   
-let x = true in x  
-if false then true else false  
-0  
-succ (succ (succ 0))  
-3  
-succ (pred 0)  
-iszero (pred (succ (succ 0)))  
-if iszero 3 then 0 else 1  
-iszero true  
-if 1 then true else false  
-if iszero 3 then 0 else false  
-let id = Lx.x in id 3  
-let id_bool = L x:Bool. x in id_bool true  
-let id_nat = L x:Nat. x in id_nat 5  
-let x = 5 in let id_nat = L x:Nat. x in id_nat x  
-let fix = lambda f.(lambda x. f (lambda y. x x y)) (lambda x. f (lambda y. x x y)) in let sumaux = lambda f. (lambda n. (lambda m. if (iszero n) then m else succ (f (pred n) m))) in let sum = fix sumaux in sum 21 34  
-let fix = lambda f.(lambda x. f (lambda y. x x y)) (lambda x. f (lambda y. x x y)) in let sumaux = lambda f. (lambda n. (lambda m. if (iszero n) then m else succ (f (pred n) m))) in let sum = fix sumaux in let prodaux = lambda f. (lambda n. (lambda m. if (iszero m) then 0 else sum n (f n (pred m)))) in let prod = fix prodaux in prod 12 5  
+---
 
-letrec sum : Nat -> Nat -> Nat = lambda n : Nat. lambda m : Nat. if iszero n then m else succ (sum (pred n) m) in sum 21 34
+## Fix Functions
 
-## Fix functions : 
+### Add
 
-### add
-add = 
+```ocaml
+add =
   letrec add_aux : Nat -> Nat -> Nat =
     lambda n: Nat. lambda m: Nat.
       if iszero n then m else succ (add_aux (pred n) m)
-  in add_aux;;
+  in add_aux
+```
 
-### product
+### Product
+
+```ocaml
 prod =
   letrec prod_aux : Nat -> Nat -> Nat =
     lambda n: Nat. lambda m: Nat.
       if iszero n then 0
       else add m (prod_aux (pred n) m)
-  in prod_aux;;
+  in prod_aux
+```
 
-### fibonacci
+### Fibonacci
+
+```ocaml
 fib =
   letrec fib_aux : Nat -> Nat =
     lambda n: Nat.
       if iszero n then 0
       else if iszero (pred n) then 1
       else add (fib_aux (pred n)) (fib_aux (pred (pred n)))
-  in fib_aux;;
+  in fib_aux
+```
 
-### factorial 
+### Factorial
+
+```ocaml
 fact =
   letrec fact_aux : Nat -> Nat =
     lambda n: Nat.
       if iszero n then 1
       else prod n (fact_aux (pred n))
-  in fact_aux;;
+  in fact_aux
+```
 
+---
 
-## Variant functions
+## Variant Functions
 
-### Example absolute
-Int = <pos:Nat, zero:Bool, neg:Nat>;;
+### Example: Absolute Value
 
-p3 = <pos=3> as Int;;
+```ocaml
+Int = <pos:Nat, zero:Bool, neg:Nat>
 
-z0 = <zero=true> as Int;;
-
-n5 = <neg=5> as Int;;
+p3 = <pos=3> as Int
+z0 = <zero=true> as Int
+n5 = <neg=5> as Int
 
 abs = L i : Int.
-case i of
-<pos=p> => (<pos=p> as Int)
-| <zero=z> => (<zero=true> as Int)
-| <neg=n> => (<pos=n> as Int);;
+  case i of
+    <pos=p> => (<pos=p> as Int)
+  | <zero=z> => (<zero=true> as Int)
+  | <neg=n> => (<pos=n> as Int)
+```
 
+### Add Variant Integers
 
-### Add
+```ocaml
+Int = <pos:Nat, zero:Bool, neg:Nat>
 
-
-Int = <pos:Nat, zero:Bool, neg:Nat>;;
-p3 = <pos=3> as Int;;
-n3 = <neg=3> as Int;;
-n5 = <neg=5> as Int;;
-z0 = <zero=true> as Int;;
-
-p7 = <pos=3> as Int;;
-
+p3 = <pos=3> as Int
+n3 = <neg=3> as Int
+n5 = <neg=5> as Int
+z0 = <zero=true> as Int
+p7 = <pos=3> as Int
 
 add = letrec add : Int -> Int -> Int =
-  L i1 : Int.
-  L i2 : Int.
+  L i1 : Int. L i2 : Int.
     case i1 of
       <zero=z> => i2
     | <pos=p1> =>(
@@ -114,66 +134,87 @@ add = letrec add : Int -> Int -> Int =
         | <neg=n2> =>
             if iszero n1 then i2
             else add (<neg=pred n1> as Int) (<neg=succ n2> as Int))
-in add;;
+in add
+```
 
+---
 
-## Lists functions
+## List Functions
 
+```ocaml
+l1 = cons [Nat] 10 (nil [Nat])
+nil [Nat]
+cons [Nat] (succ 1) (nil [Nat])
+isnil [Nat] (nil [Nat])
+isnil [Nat] l1
+head [Nat] l1
+head [Nat] (nil [Nat])
+tail [Nat] l1
+tail [Nat] (nil [Nat])
+l3 = cons [Nat] 5 (cons [Nat] 10 (cons [Nat] 20 (nil [Nat])))
+l2 = cons [Nat] 1 (cons [Nat] 2 (nil [Nat]))
+```
 
+### Add Natural Numbers
 
-l1 = cons [Nat] 10 (nil [Nat]);;  
-nil [Nat];;  
-cons [Nat] (succ 1) (nil [Nat]);;  
-isnil [Nat] (nil [Nat]);;  
-isnil [Nat] l1;;  
-head [Nat] l1;;  
-head [Nat] (nil [Nat]);;  
-tail [Nat] l1;;  
-tail [Nat] (nil [Nat]);;  
-l3 = cons [Nat] 5 (cons [Nat] 10 (cons [Nat] 20 (nil [Nat])));;  
-l2 = cons [Nat] 1 (cons [Nat] 2 (nil [Nat]));;  
+```ocaml
+add_nat = letrec add : Nat -> Nat -> Nat =
+  lambda n: Nat. lambda m: Nat.
+    if iszero n then m else succ (add (pred n) m)
+in add
+```
 
-### add 
-add_nat = 
-  letrec add : Nat -> Nat -> Nat = 
-    lambda n: Nat. lambda m: Nat. 
-      if iszero n then m else succ (add (pred n) m)
-  in add;;
+### Calculate Length of a List
 
-### calculate the length of a list
-length =
-  letrec len : List Nat -> Nat =
-    lambda l: List Nat.
-      if isnil [Nat] l then
-        0
-      else
-        add_nat 1 (len (tail [Nat] l))
-  in len;;
+```ocaml
+length = letrec len : List Nat -> Nat =
+  lambda l: List Nat.
+    if isnil [Nat] l then 0
+    else add_nat 1 (len (tail [Nat] l))
+in len
+```
 
-### add element to a list
-  append =
-  letrec app : List Nat -> List Nat -> List Nat =
-    lambda l1: List Nat. lambda l2: List Nat.
-      if isnil [Nat] l1 then
-        l2
-      else
-        cons [Nat] (head [Nat] l1) (app (tail [Nat] l1) l2)
-  in app;;
+### Append Element to a List
 
-### do a mapping to a list 
-  map =
-  letrec map_nat : (Nat -> Nat) -> List Nat -> List Nat =
-    lambda f: (Nat -> Nat). lambda l: List Nat.
-      if isnil [Nat] l then
-        nil [Nat]
-      else
-        cons [Nat] (f (head [Nat] l)) (map_nat f (tail [Nat] l))
-  in map_nat;;
+```ocaml
+append = letrec app : List Nat -> List Nat -> List Nat =
+  lambda l1: List Nat. lambda l2: List Nat.
+    if isnil [Nat] l1 then l2
+    else cons [Nat] (head [Nat] l1) (app (tail [Nat] l1) l2)
+in app
+```
 
+### Map Function Over a List
 
+```ocaml
+map = letrec map_nat : (Nat -> Nat) -> List Nat -> List Nat =
+  lambda f: (Nat -> Nat). lambda l: List Nat.
+    if isnil [Nat] l then nil [Nat]
+    else cons [Nat] (f (head [Nat] l)) (map_nat f (tail [Nat] l))
+in map_nat
+```
 
-  
+---
 
+## Subtype Record Example
 
+```ocaml
+rcd1 = {x:Nat}
+rcd2 = {x:Nat, y:Bool}
 
+func1 = lambda r:rcd1. r.x
 
+func1 {x=50,y=true}
+```
+
+## Subtype Function Example
+
+```ocaml
+rcd1 = {x:Nat}
+rcd2 = {x:Nat, y:Bool}
+
+func_simple = lambda r:rcd1. r.x
+apply_func = lambda f:(rcd2 -> Nat). lambda arg:rcd2. f arg
+
+apply_func func_simple {x=50, y=false}
+```

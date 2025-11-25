@@ -139,9 +139,9 @@ atomicTerm :
 auxiliaryTerm:
     atomicTerm { $1 }
     
-  | atomicTerm DOT IDV (*t.l*)
+  | auxiliaryTerm DOT IDV (*t.l*)
       { TmProj ($1, $3) }
-  | atomicTerm DOT INTV (*t.n*) 
+  | auxiliaryTerm DOT INTV (*t.n*) 
       { TmProj ($1, string_of_int $3) }
 
 ty :
