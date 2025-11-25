@@ -1,0 +1,260 @@
+================================================================================
+MANUAL TÉCNICO Y DE USUARIO: INTÉRPRETE DE CÁLCULO LAMBDA EXTENDIDO
+================================================================================
+
+1. INTRODUCCIÓN
+--------------------------------------------------------------------------------
+El objetivo principal de este proyecto es la implementación de un evaluador e
+intérprete para un lenguaje de programación funcional basado en el Cálculo
+Lambda con Tipos Simples (STLC). Desarrollado en OCaml, este sistema extiende
+el cálculo base incorporando características de lenguajes modernos:
+
+  * Tipos Base: Naturales, Booleanos y Cadenas (Strings).
+  * Estructuras de Datos: Tuplas, Registros, Variantes (Tipos Suma) y Listas.
+  * Recursividad: Soporte nativo mediante combinadores de punto fijo.
+  * Tipado Estático: Verificación rigurosa de tipos antes de la ejecución.
+
+
+2. ARQUITECTURA DEL SISTEMA
+--------------------------------------------------------------------------------
+El diseño del proyecto es modular, favoreciendo la separación de
+responsabilidades en cuatro componentes clave:
+
+A. Lexer (lexer.mll)
+   Generado mediante ocamllex. Es responsable del análisis léxico; transforma
+   el flujo de caracteres de entrada en una secuencia de tokens válidos
+   (ej. LAMBDA, IF, IN, STRINGV, INTV).
+
+B. Parser (parser.mly)
+   Generado mediante ocamlyacc. Realiza el análisis sintáctico consumiendo los
+   tokens para construir el Árbol de Sintaxis Abstracta (AST). También gestiona
+   la traducción sintáctica ("desugaring") de construcciones complejas como
+   'letrec'.
+
+C. Núcleo (lambda.ml)
+   El corazón del intérprete. Define:
+   - Los tipos de datos algebraicos para Tipos (ty) y Términos (term).
+   - El contexto de evaluación.
+   - La lógica de inferencia y chequeo de tipos (typeof).
+   - La semántica de evaluación paso a paso (eval1, eval).
+
+D. Interfaz Principal (main.ml)
+   Implementa el bucle de lectura-evaluación-impresión (REPL). Gestiona la
+   entrada de datos (incluyendo soporte para bloques multilínea) y formatea
+   la salida de los resultados.
+
+
+3. DEFINICIÓN DEL LENGUAJE
+--------------------------------------------------------------------------------
+El lenguaje distingue estrictamente entre Tipos (metadatos que describen
+valores) y Términos (expresiones computables).
+
+NOTA DE SINTAXIS: Las instrucciones deben finalizar con doble punto y coma (;;)
+para ser procesadas por el intérprete.
+
+3.1. TIPOS DE DATOS (AST - Type ty)
+Los tipos comienzan obligatoriamente con mayúscula.
+
+  A. Tipos Primitivos
+     - TyBool: Booleanos.
+       Ej: AliasBool = Bool;;
+     - TyNat: Números Naturales.
+       Ej: AliasNat = Nat;;
+     - TyString: Cadenas de caracteres.
+       Ej: Texto = String;;
+
+  B. Tipos Compuestos
+     - TyArr: Funciones (Flechas).
+       Ej: Operacion = Nat -> Nat;;
+     - TyTuple: Tuplas (Secuencia ordenada de tipos).
+       Ej: Par = {Nat, Bool};;
+     - TyRcd: Registros (Campos etiquetados).
+       Ej: Punto = {x:Nat, y:Nat};;
+     - TyVariant: Variantes (Unión etiquetada).
+       Ej: Entero = <pos:Nat, zero:Bool, neg:Nat>;;
+     - TyList: Listas homogéneas.
+       Ej: ListaNumeros = List Nat;;
+
+  C. Variables de Tipo
+     - TyVar: Alias definidos previamente.
+       Ej:
+         Coordenada = Nat;;
+         Punto3D = {Coordenada, Coordenada, Coordenada};;
+
+
+3.2. TÉRMINOS (AST - Type term)
+Los términos representan la lógica del programa.
+
+  A. Control de Flujo
+     - Condicionales (TmIf):
+       if true then 5 else 0;;
+
+     - Pattern Matching (TmCase):
+       Requiere un tipo variante definido previamente.
+       Ej:
+         Tipoint = <pos:Nat, zero:Bool>;;
+         let valor = <pos=10> as Tipoint in
+           case valor of
+             <pos=x> => succ x
+           | <zero=z> => 0;;
+
+  B. Aritmética y Lógica
+     - Booleanos: true, false.
+     - Naturales: 0, succ (succ 0).
+     - Operadores: pred 5, iszero 0.
+
+  C. Funciones y Recursividad
+     - Abstracción (TmAbs):
+       lambda x:Nat. succ x;;
+
+     - Aplicación (TmApp):
+       (lambda x:Nat. succ x) 5;;
+
+     - Ligadura Local (TmLetIn):
+       let x = 5 in succ x;;
+
+     - Recursividad (TmFix / letrec):
+       letrec f:Nat->Nat =
+         lambda x:Nat. if iszero x then 0 else f (pred x)
+       in f 5;;
+
+  D. Estructuras de Datos
+     - Tuplas (TmTuple):
+       t = {10, true, "hola"};;
+       t.1;;  (* Acceso al primer elemento *)
+
+     - Registros (TmRcd):
+       p = {x=5, y=10};;
+       p.x;;  (* Acceso por etiqueta *)
+
+     - Variantes (TmVariant):
+       Estado = <ok:Nat, error:String>;;
+       res = <ok=200> as Estado;;
+
+     - Listas (TmCons, TmNil):
+       l = cons [Nat] 1 (cons [Nat] 2 (nil [Nat]));;
+       head [Nat] l;;
+       isnil [Nat] l;;
+
+     - Cadenas (TmString):
+       concat "Hola " "Mundo";;
+
+
+3.3. COMANDOS DEL SISTEMA
+Instrucciones de nivel superior para interactuar con el entorno.
+
+  1. Bind (x = term): Evalúa un término y lo asigna a una variable global.
+     >> x = succ 5;;
+     x : Nat = 6
+
+  2. BindTy (Type = ty): Define un alias de tipo global.
+     >> Coordenada = {Nat, Nat};;
+     Coordenada = {Nat, Nat}
+
+  3. Eval (term): Evalúa una expresión y muestra el resultado sin guardarlo.
+     >> if true then 1 else 0;;
+     1 : Nat
+
+  4. Quit (quit): Cierra el intérprete.
+     >> quit;;
+
+
+4. SEMÁNTICA ESTÁTICA (TIPADO)
+--------------------------------------------------------------------------------
+El sistema emplea un tipado fuerte y estático. La función 'typeof' verifica la
+corrección antes de ejecutar cualquier cálculo.
+
+  * Subtipado (Subtyping):
+    Implementa la relación de inclusión S <: T.
+    - Regla de Anchura: Un registro con más campos ({x:Nat, y:Nat}) es subtipo
+      de uno con menos campos ({x:Nat}). Esto permite pasar objetos complejos
+      a funciones que esperan interfaces simples.
+
+  * Resolución de Alias:
+    Antes de validar tipos, el sistema resuelve todos los TyVar definidos por
+    el usuario. Incluye detección de ciclos (ej. A = B y B = A) lanzando
+    la excepción Type_alias_loop.
+
+  * Validaciones Críticas:
+    - If-Else: Ambas ramas deben unificarse al mismo tipo.
+    - Case: Todas las ramas de destrucción de una variante deben retornar
+      exactamente el mismo tipo.
+    - Listas: Deben ser estrictamente homogéneas.
+
+
+5. SEMÁNTICA DINÁMICA (EVALUACIÓN)
+--------------------------------------------------------------------------------
+El intérprete utiliza una estrategia de paso pequeño (small-step semantics).
+
+  1. Sustitución y Renombrado:
+     La función 'subst' es el motor de la computación. Implementa alpha-conversion
+     (renombrado de variables) para evitar la captura accidental de variables
+     libres.
+
+  2. Recursividad (Punto Fijo):
+     Se implementa mediante el término TmFix. La regla de reducción E-FixBeta
+     sustituye el término recursivo dentro del cuerpo de la función solo cuando
+     es necesario.
+
+  3. Evaluación de Estructuras:
+     - Listas: Los constructores 'cons' son estrictos (evalúan la cabeza
+       antes de construir la lista).
+     - Variantes: La expresión 'case' evalúa el término a una etiqueta y
+       selecciona dinámicamente la rama de código correspondiente.
+     - Cadenas: Se utiliza la concatenación nativa del lenguaje anfitrión.
+
+
+6. GUÍA DE INSTALACIÓN Y USO
+--------------------------------------------------------------------------------
+
+6.1. COMPILACIÓN
+   El proyecto incluye un Makefile para automatizar el proceso.
+   1. Abra una terminal en la raíz del proyecto.
+   2. Ejecute el comando:
+      $ make
+
+   Esto generará el ejecutable binario llamado 'top'.
+
+6.2. EJECUCIÓN
+   Para iniciar el entorno interactivo:
+   $ ./top
+
+   El sistema mostrará el prompt ">>". Puede introducir código en múltiples
+   líneas. Para ejecutar el bloque, finalice con ";;" y presione Enter.
+
+
+7. EJEMPLOS DE USO
+--------------------------------------------------------------------------------
+
+7.1. Manipulación de Cadenas
+   >> saludo = "Hola";;
+   >> nombre = "Usuario";;
+   >> concat saludo (concat " " nombre);;
+   "Hola Usuario" : String
+
+7.2. Listas de Naturales
+   >> l = cons [Nat] 10 (cons [Nat] 20 (nil [Nat]));;
+   >> head [Nat] l;;
+   10 : Nat
+   >> tail [Nat] l;;
+   (cons [Nat] 20 nil [Nat]) : List Nat
+
+7.3. Pattern Matching con Variantes
+   >> Result = <ok:Nat, fail:Bool>;;
+   >> res = <ok=100> as Result;;
+   >> case res of
+        <ok=n> => succ n
+      | <fail=b> => 0;;
+   101 : Nat
+
+7.4. Función Recursiva (Factorial)
+   >> add_nat = letrec add : Nat -> Nat -> Nat =
+        lambda n: Nat. lambda m: Nat.
+            if iszero n then m else succ (add (pred n) m)
+        in add;;
+        add_nat 3 4 ;;
+   7 : Nat
+
+================================================================================
+FIN DEL DOCUMENTO
+================================================================================
