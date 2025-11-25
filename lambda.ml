@@ -92,33 +92,40 @@ let getvbinding ctx x =
 
 (* TYPE MANAGEMENT (TYPING) *)
 
-let rec string_of_ty ty =
-  match ty with
-  | TyBool -> "Bool"
-  | TyNat -> "Nat"
-  | TyString -> "String"
-  | TyVar s -> s
-  | TyArr (ty1, ty2) ->
-      let s1 =
-        match ty1 with
-        | TyArr _ -> "(" ^ string_of_ty ty1 ^ ")"
-        | _ -> string_of_ty ty1
-      in
-      let s2 = string_of_ty ty2 in
-      s1 ^ " -> " ^ s2
+open Format
+
+(* Helper para imprimir tipos *)
+let rec print_ty fmt ty = match ty with
+  | TyBool -> fprintf fmt "Bool"
+  | TyNat -> fprintf fmt "Nat"
+  | TyString -> fprintf fmt "String"
+  | TyVar s -> fprintf fmt "%s" s
+  | TyList ty -> fprintf fmt "List %a" print_atomic_ty ty
+  | TyArr (t1, t2) ->
+      fprintf fmt "@[%a ->@ %a@]" print_atomic_ty t1 print_ty t2
   | TyTuple tys ->
-      "{" ^ (String.concat " , " (List.map string_of_ty tys)) ^ "}"
+      fprintf fmt "{@[<hov>%a@]}" (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ",@ ") print_ty) tys
   | TyRcd fields ->
-      let field_strings = List.map (fun (label, ty) -> label ^ ": " ^ string_of_ty ty) fields in
-      "{" ^ (String.concat " , " field_strings) ^   "}"
-  | TyVariant fields -> 
-      let s_fields = List.map (fun (l, ty) -> l ^ ":" ^ string_of_ty ty) fields in
-      "<" ^ (String.concat ", " s_fields) ^ ">"
-  | TyList ty_elem ->
-      "List " ^ string_of_ty ty_elem
-  
+      fprintf fmt "{@[<hov>%a@]}" (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ",@ ") print_field_ty) fields
+  | TyVariant fields ->
+      fprintf fmt "<@[<hov>%a@]>" (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ",@ ") print_field_ty) fields
+
+and print_atomic_ty fmt ty = match ty with
+  | TyArr _ -> fprintf fmt "(%a)" print_ty ty
+  | _ -> print_ty fmt ty
+
+and print_field_ty fmt (l, ty) =
+  fprintf fmt "%s : %a" l print_ty ty
 ;;
 
+(* Wrapper para mantener compatibilidad con el resto del código *)
+let string_of_ty ty =
+  let buf = Buffer.create 100 in
+  let fmt = formatter_of_buffer buf in
+  print_ty fmt ty;
+  pp_print_flush fmt ();
+  Buffer.contents buf
+;;
 
 exception Type_error of string
 ;;
@@ -361,88 +368,76 @@ let rec typeof ctx tm = match tm with
 
 (* TERMS MANAGEMENT (EVALUATION) *)
 
-let rec string_of_term t = (* para pasar de termino a cadena *)
-  match t with
-  | TmTrue -> "true"
-  | TmFalse -> "false"
-  | TmZero -> "0"
-  | TmIf (t1,t2,t3) ->
-      "if " ^ string_of_term t1 ^
-      " then " ^ string_of_term t2 ^
-      " else " ^ string_of_term t3
-  | TmSucc t ->
-      let rec f n t' = match t' with
-        | TmZero -> string_of_int n
-        | TmSucc s -> f (n+1) s
-        | _ -> "succ " ^ string_of_atom t'
-      in f 1 t
-  | TmPred t -> "pred " ^ string_of_atom t ^ ""
-  | TmIsZero t -> "iszero " ^ string_of_atom t ^ ""
-  | TmVar s -> s
+let rec print_term fmt t = match t with
+  | TmIf (t1, t2, t3) ->
+      fprintf fmt "@[<v 2>if %a then@ %a@ else@ %a@]"
+        print_term t1 print_term t2 print_term t3
   | TmAbs (s, tyS, t) ->
-      "lambda " ^ s ^ ":" ^ string_of_ty tyS ^ ". " ^ string_of_term t ^ ""
-  | TmApp _ as t -> string_of_app t
+      fprintf fmt "@[<2>lambda %s:%a.@ %a@]" s print_ty tyS print_term t
   | TmLetIn (s, t1, t2) ->
-      "let " ^ s ^ " = " ^ string_of_term t1 ^ " in " ^ string_of_term t2
+      fprintf fmt "@[<v>let %s = %a in@ %a@]" s print_term t1 print_term t2
   | TmFix t ->
-      "fix " ^ string_of_term t ^ ""
-  | TmString s ->
-      "\"" ^ s ^ "\""
-  | TmConcat (t1, t2) ->
-      "concat(" ^ string_of_term t1 ^ ", " ^ string_of_term t2 ^ ")"
-  | TmTuple ts ->
-      "{" ^ (String.concat ", " (List.map string_of_term ts)) ^ "}"
-  | TmRcd fields ->
-      let field_strings =
-        List.map (fun (lbl, t) -> lbl ^ " = " ^ string_of_term t) fields
-      in
-      "{" ^ (String.concat ", " field_strings) ^ "}"
-  | TmProj (t, lbl) ->
-      (match t with
-      | TmRcd fields ->
-          (try string_of_term (List.assoc lbl fields)
-            with Not_found -> raise (Type_error ("label "^lbl^" not found in record")))
-        | TmTuple ts ->
-            (try string_of_term (List.nth ts (int_of_string lbl - 1))
-              with Failure _ | Invalid_argument _ -> raise (Type_error ("invalid tuple index: " ^ lbl)))
-      | _ ->
-          "(" ^ string_of_term t ^ ")." ^ lbl)
-  | TmVariant (l, t, ty) ->
-      "<" ^ l ^ "=" ^ string_of_term t ^ ">"
-
+      fprintf fmt "@[<2>fix %a@]" print_term t
   | TmCase (t, branches) ->
-      let string_branches = List.map (fun (l, x, t_branch) ->
-        "<" ^ l ^ "=" ^ x ^ "> => " ^ string_of_term t_branch) branches
-      in
-      "case " ^ string_of_term t ^ " of " ^ String.concat " | " string_branches
-  | TmNil ty ->
-      "nil [" ^ string_of_ty ty ^ "]"
-  | TmCons (ty, t1, t2) ->
-      "(cons [" ^ string_of_ty ty ^ "] " ^ string_of_atom t1 ^ " " ^ string_of_atom t2 ^ ")"
-  | TmIsNil (ty, t) ->
-      "isnil [" ^ string_of_ty ty ^ "] " ^ string_of_atom t
-  | TmHead (ty, t) ->
-      "head [" ^ string_of_ty ty ^ "] " ^ string_of_atom t
-  | TmTail (ty, t) ->
-      "tail [" ^ string_of_ty ty ^ "] " ^ string_of_atom t
-  
-and string_of_atom t =
-  match t with
-  | TmVar s -> s
-  | TmTrue -> "true"
-  | TmFalse -> "false"
-  | TmZero -> "0"
-  | _ -> "(" ^ string_of_term t ^ ")"
+      fprintf fmt "@[<v 2>case %a of@ %a@]"
+        print_term t
+        (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@ | ") print_branch) branches
+  | _ ->
+      print_app_term fmt t
 
-and string_of_app t =
-  match t with
+and print_app_term fmt t = match t with
   | TmApp (t1, t2) ->
-      string_of_app t1 ^ " " ^ string_of_atom t2
-  | t -> string_of_atom t
- 
+      fprintf fmt "@[<2>%a@ %a@]" print_app_term t1 print_atomic_term t2
+  | TmSucc t1 ->
+      let rec f n t' = match t' with
+        | TmZero -> fprintf fmt "%d" n
+        | TmSucc s -> f (n+1) s
+        | _ -> fprintf fmt "(succ %a)" print_atomic_term t1
+      in f 1 t1
+  | TmPred t1 -> fprintf fmt "pred %a" print_atomic_term t1
+  | TmIsZero t1 -> fprintf fmt "iszero %a" print_atomic_term t1
+  | TmConcat (t1, t2) -> fprintf fmt "concat %a %a" print_atomic_term t1 print_atomic_term t2
+  | TmCons (ty, t1, t2) ->
+      fprintf fmt "@[<2>cons [%a]@ %a@ %a@]" print_ty ty print_atomic_term t1 print_atomic_term t2
+  | TmHead (ty, t) -> fprintf fmt "head [%a] %a" print_ty ty print_atomic_term t
+  | TmTail (ty, t) -> fprintf fmt "tail [%a] %a" print_ty ty print_atomic_term t
+  | TmIsNil (ty, t) -> fprintf fmt "isnil [%a] %a" print_ty ty print_atomic_term t
+  | _ ->
+      print_atomic_term fmt t
+
+and print_atomic_term fmt t = match t with
+  | TmTrue -> fprintf fmt "true"
+  | TmFalse -> fprintf fmt "false"
+  | TmZero -> fprintf fmt "0"
+  | TmVar s -> fprintf fmt "%s" s
+  | TmString s -> fprintf fmt "\"%s\"" s
+  | TmNil ty -> fprintf fmt "nil [%a]" print_ty ty
+  | TmTuple ts ->
+      fprintf fmt "{@[<hov>%a@]}" (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ",@ ") print_term) ts
+  | TmRcd fields ->
+      fprintf fmt "{@[<hov>%a@]}" (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ",@ ") print_field) fields
+  | TmVariant (l, t, _) ->
+      fprintf fmt "<%s=%a>" l print_term t
+  | TmProj (t, l) ->
+      fprintf fmt "%a.%s" print_atomic_term t l
+  | _ ->
+      fprintf fmt "(%a)" print_term t
+
+and print_field fmt (l, t) =
+  fprintf fmt "%s = %a" l print_term t
+
+and print_branch fmt (l, x, t) =
+  fprintf fmt "<%s=%s> => %a" l x print_term t
 ;;
 
-
+(* Wrapper: Convierte la salida formateada a string plano para usar en el resto del programa *)
+let string_of_term t =
+  let buf = Buffer.create 100 in
+  let fmt = formatter_of_buffer buf in
+  print_term fmt t;
+  pp_print_flush fmt ();
+  Buffer.contents buf
+;;
 
 
 
@@ -815,7 +810,12 @@ let execute ctx = function
     (match tm with
      | TmVar x -> 
          let ty = gettbinding ctx x in
-         print_endline (x ^ " : " ^ string_of_ty ty);
+         (try
+            let val_tm = eval ctx tm in
+            print_endline (x ^ " : " ^ string_of_ty ty ^ " = " ^ string_of_term val_tm)
+          with Not_found ->
+            print_endline (x ^ " : " ^ string_of_ty ty))
+         ;
          ctx
      | _ ->
          (* eval and show results*)
