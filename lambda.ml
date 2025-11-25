@@ -152,6 +152,57 @@ let rec resolve_ty ctx ty seen_aliases = match ty with
   | (TyBool | TyNat | TyString) as t -> t
 ;;
 
+
+
+(* Comprueba si tyS es subtipo de tyT *)
+let rec subtype ctx tyS tyT =
+  (* Primero resolvemos los alias para comparar los tipos reales *)
+  let tyS = resolve_ty ctx tyS [] in
+  let tyT = resolve_ty ctx tyT [] in
+  
+  if tyS = tyT then true (* S-Refl: Son iguales *)
+  else
+    match (tyS, tyT) with
+    (* S-Rcd: Ancho, Profundidad y Permutación combinados *)
+    | (TyRcd fieldsS, TyRcd fieldsT) ->
+        (* Para cada campo que espera T (l: tyT_field)... *)
+        List.for_all (fun (l, tyT_field) ->
+          try
+            (* ...buscamos si S tiene ese campo (l: tyS_field) *)
+            let tyS_field = List.assoc l fieldsS in
+            (* Y comprobamos recursivamente si tyS_field <: tyT_field *)
+            subtype ctx tyS_field tyT_field
+          with Not_found -> false (* Si S no tiene un campo que T pide, falla (Width) *)
+        ) fieldsT
+
+    (* S-Arrow: Funciones *)
+    | (TyArr(s1, s2), TyArr(t1, t2)) ->
+        (* Contravarianza en el argumento (T1 <: S1) y Covarianza en resultado (S2 <: T2) *)
+        (subtype ctx t1 s1) && (subtype ctx s2 t2)
+
+    (* S-Tuple: Similar a registros pero por posición (Depth) *)
+    | (TyTuple tysS, TyTuple tysT) ->
+        if List.length tysS <> List.length tysT then false (* Deben tener mismo tamaño *)
+        else List.for_all2 (fun s t -> subtype ctx s t) tysS tysT
+
+    (* S-Variant: (Opcional pero recomendado) Variantes *)
+    (* Una variante es subtipo si tiene MENOS opciones que la supertipo (puede ser gestionada por el supertipo) *)
+    | (TyVariant fieldsS, TyVariant fieldsT) ->
+        List.for_all (fun (l, tyS_field) ->
+          try
+            let tyT_field = List.assoc l fieldsT in
+            subtype ctx tyS_field tyT_field
+          with Not_found -> false (* S tiene una etiqueta que T no conoce -> Error *)
+        ) fieldsS
+    
+    (* S-List: Listas (Covarianza simple) *)
+    | (TyList tyS_elem, TyList tyT_elem) ->
+        subtype ctx tyS_elem tyT_elem
+
+    | _ -> false
+;;
+
+
 (*get the type of a term*)
 let rec typeof ctx tm = match tm with 
     (* T-True *)
@@ -206,7 +257,7 @@ let rec typeof ctx tm = match tm with
       let tyT2 = typeof ctx t2 in
       (match (resolve_ty ctx tyT1 []) with
            TyArr (tyT11, tyT12) ->
-             if (resolve_ty ctx tyT2 []) = tyT11 then tyT12
+             if subtype ctx tyT2 tyT11 then tyT12
              else raise (Type_error "parameter type mismatch")
          | _ -> raise (Type_error "arrow type expected"))
 
