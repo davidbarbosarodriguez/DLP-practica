@@ -1,4 +1,6 @@
 (* TYPE DEFINITIONS *)
+exception Type_error of string
+exception Type_alias_loop of string
 
 (*types*)
 type ty =
@@ -72,14 +74,23 @@ let emptyctx = [] ;;
 let addtbinding ctx x bind = (x, TyBind bind) :: ctx ;;
 let gettbinding ctx x = match List.assoc x ctx with TyBind ty -> ty | TyTmBind (ty, _) -> ty ;;
 let addvbinding ctx x ty t = (x, TyTmBind (ty, t)) :: ctx ;;
-let getvbinding ctx x = match List.assoc x ctx with TyTmBind (_, t) -> t | _ -> raise Not_found ;;
-
+let getvbinding ctx x = 
+  try
+    match List.assoc x ctx with 
+    | TyTmBind (_, t) -> t 
+    | TyBind _ -> raise (Type_error ("Identifier " ^ x ^ " is a Type, not a Value"))
+  with Not_found -> 
+    raise (Type_error ("Variable " ^ x ^ " is not defined"))
+;;
 
 (* TYPE MANAGEMENT (TYPING) *)
 
 open Format
 
 (* [MOD] Updated to print new types (Lists, Variants, Strings) *)
+(* Asegúrate de tener esto al principio del archivo o módulo *)
+open Format
+
 let rec print_ty fmt ty = match ty with
   | TyBool -> fprintf fmt "Bool"
   | TyNat -> fprintf fmt "Nat"
@@ -89,17 +100,20 @@ let rec print_ty fmt ty = match ty with
   | TyArr (t1, t2) ->
       fprintf fmt "@[%a ->@ %a@]" print_atomic_ty t1 print_ty t2
   | TyTuple tys ->
+      (* Imprime tuplas como {Nat, Bool} *)
       fprintf fmt "{@[<hov>%a@]}" (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ",@ ") print_ty) tys
   | TyRcd fields ->
       fprintf fmt "{@[<hov>%a@]}" (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ",@ ") print_field_ty) fields
   | TyVariant fields ->
       fprintf fmt "<@[<hov>%a@]>" (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ",@ ") print_field_ty) fields
-(* ... (Atomic print functions omitted) ... *)
 
+(* Fíjate en el 'and' aquí abajo, es crucial *)
 and print_atomic_ty fmt ty = match ty with
   | TyArr _ -> fprintf fmt "(%a)" print_ty ty
+  | TyList _ -> fprintf fmt "(%a)" print_ty ty (* Paréntesis necesarios si hay listas anidadas complejas *)
   | _ -> print_ty fmt ty
 
+(* Y otro 'and' aquí *)
 and print_field_ty fmt (l, ty) =
   fprintf fmt "%s : %a" l print_ty ty
 ;;
@@ -112,8 +126,6 @@ let string_of_ty ty =
   Buffer.contents buf
 ;;
 
-exception Type_error of string
-exception Type_alias_loop of string
 
 (* [NEW] Function to handle Type Aliases (e.g., resolving 'T' to 'Nat') with cycle detection *)
 let rec resolve_ty ctx ty seen_aliases = match ty with
@@ -503,13 +515,23 @@ let rec eval1 ctx tm = match tm with
   | TmFix t1 -> let t1' = eval1 ctx t1 in TmFix t1'
 
   (* [EXT] Projection for Tuples/Records *)
+  (* En lambda.ml, dentro de 'rec eval1 ctx tm = match tm with' ... *)
+
+  (* 1. Intenta proyectar si es una TUPLA literal *)
   | TmProj (TmTuple ts, n) ->
       (try List.nth ts ((int_of_string n)-1)
        with Failure _ | Invalid_argument _ -> raise NoRuleApplies)
+
+  (* 2. Intenta proyectar si es un RECORD literal *)
   | TmProj (TmRcd fields, lbl) ->
-    (try List.assoc lbl fields
-     with Not_found -> raise NoRuleApplies)
+      (try List.assoc lbl fields
+       with Not_found -> raise NoRuleApplies)
   
+  (* 3. [NUEVO] REGLA DE CONGRUENCIA: Si no es valor, evalúa el interior *)
+  | TmProj (t1, l) -> 
+      let t1' = eval1 ctx t1 in TmProj (t1', l)
+
+
   (* [EXT] Evaluation of Tuples (left-to-right) *)
   | TmTuple ts ->
       let rec eval_step l_evaluados = function
@@ -609,3 +631,5 @@ let execute ctx = function
       | Type_alias_loop e -> print_endline ("type error: " ^ e); ctx)
   | Quit -> raise End_of_file
   ;;
+
+
