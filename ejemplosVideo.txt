@@ -19,24 +19,6 @@ in
     prod 12 5
 ;;
 
-
-va mal
-
-lambda n:Nat.
-  lambda m:Nat.
-    if iszero n then
-      m
-      else
-      (succ ((fix lambda sum:Nat -> Nat -> Nat.
-                    lambda n:Nat.
-                      lambda m:Nat.
-                        if iszero n then
-                          m
-                          else
-                          (succ (sum (pred n) m)))
-               (pred n) m)) : Nat -> Nat -> Nat;;
-
-
 x = 5;;
 
 succ x ;;
@@ -57,6 +39,9 @@ N = Nat ;;
 este no podemos hacerlo porque no permitimos que aparezca una letra mayuscula si no es la primera al definir una variable
 
 NinN = N -> N ;;
+
+seria 
+Nin = N -> N ;;
 
 A = N -> N ;;
 

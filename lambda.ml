@@ -89,6 +89,8 @@ let rec print_ty fmt ty = match ty with
   | TyList ty -> fprintf fmt "List %a" print_atomic_ty ty
   | TyArr (t1, t2) ->
       fprintf fmt "@[%a ->@ %a@]" print_atomic_ty t1 print_ty t2
+  | TyTuple [] -> fprintf fmt "Unit"
+
   | TyTuple tys ->
       (* Print tuples like {Nat, Bool} *)
       fprintf fmt "{@[<hov>%a@]}" (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ",@ ") print_ty) tys
@@ -155,7 +157,9 @@ let rec subtype ctx tyS tyT =
   else
     match (tyS, tyT) with
     (* Record subtyping: S is a subtype of T if S has all fields of T with compatible types *)
-    | (TyRcd fieldsS, TyRcd fieldsT) ->
+      | (TyRcd _, TyTuple []) -> true
+    
+      | (TyRcd fieldsS, TyRcd fieldsT) ->
         List.for_all (fun (l, tyT_field) ->
           try
             let tyS_field = List.assoc l fieldsS in
@@ -266,7 +270,7 @@ let rec typeof ctx tm = match tm with
           (try 
             let ty_expected = List.assoc l fields in
             let ty_t = typeof ctx t in
-            if (resolve_ty ctx ty_t []) = (resolve_ty ctx ty_expected []) then ty
+            if subtype ctx ty_t ty_expected then ty
             else raise (Type_error "type of variant does not match declared type")
           with
             Not_found -> raise (Type_error ("label " ^ l ^ " not found in variant type")))
@@ -367,6 +371,7 @@ and print_atomic_term fmt t = match t with
   | TmVar s -> fprintf fmt "%s" s
   | TmString s -> fprintf fmt "\"%s\"" s
   | TmNil ty -> fprintf fmt "nil [%a]" print_ty ty
+  | TmTuple [] -> fprintf fmt "unit"
   | TmTuple ts ->
       fprintf fmt "{@[<hov>%a@]}" (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ",@ ") print_term) ts
   | TmRcd fields ->

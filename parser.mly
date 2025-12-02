@@ -126,7 +126,10 @@ atomicTerm :
         in f $1 }
   | STRINGV (*string value*)
       { TmString $1 }
-      
+
+  | LBRACE RBRACE (*{}*)
+      { TmTuple [] }
+
   |LBRACE term_reg_list RBRACE (*{l1=t1, l2=t2, ...}*)
       {TmRcd (List.rev $2) }
 
@@ -160,6 +163,8 @@ atomicTy :
       { TyNat }
   | STRING (*String*)
       { TyString }
+  | LBRACE RBRACE   (*Unit*)
+      { TyTuple [] }
   | IDV (*type variable*)
       { TyVar $1 }
   | LBRACE ty_list_rev RBRACE   (*{ty1, ty2, ...}*)
