@@ -1,0 +1,188 @@
+let
+  x = 1
+in 
+  succ x;;
+
+lambda x : Nat. x;;
+
+letrec sum : Nat -> Nat -> Nat =
+  lambda n : Nat. lambda m : Nat. if iszero n then m else succ (sum (pred n) m) in
+sum 21 34
+
+
+letrec sum : Nat -> Nat -> Nat =
+  lambda n : Nat. lambda m : Nat. if iszero n then m else succ (sum (pred n) m)
+in
+  letrec prod : Nat -> Nat -> Nat =
+    lambda n : Nat. lambda m : Nat. if iszero m then 0 else sum n (prod n (pred m))
+  in
+    prod 12 5
+;;
+
+
+va mal
+
+lambda n:Nat.
+  lambda m:Nat.
+    if iszero n then
+      m
+      else
+      (succ ((fix lambda sum:Nat -> Nat -> Nat.
+                    lambda n:Nat.
+                      lambda m:Nat.
+                        if iszero n then
+                          m
+                          else
+                          (succ (sum (pred n) m)))
+               (pred n) m)) : Nat -> Nat -> Nat;;
+
+
+x = 5;;
+
+succ x ;;
+
+f = lambda y : Nat. x;;
+
+f 3 ;;
+
+
+sum = letrec sum : Nat -> Nat -> Nat =
+  lambda n : Nat. lambda m : Nat. if iszero n then m else succ (sum (pred n) m) in
+sum;;
+
+sum x 5 ;;
+
+N = Nat ;;
+
+este no podemos hacerlo porque no permitimos que aparezca una letra mayuscula si no es la primera al definir una variable
+
+NinN = N -> N ;;
+
+A = N -> N ;;
+
+K = N -> A ;;
+
+
+sum = letrec sum : K =
+  lambda n : Nat. lambda m : Nat. if iszero n then m else succ (sum (pred n) m) in
+sum;;
+
+
+concat "para" "sol" ;;
+
+s = "sol" ;;
+
+concat (concat "para" s) "es" ;;
+
+{5, true, "abc"};;
+
+
+{5, true, "abc"}.2;;
+
+
+{5, {true, "abc"}};;
+
+{5, {true, "abc"}}.2.2;;
+
+t = {5, {true, "abc"}};; 
+
+t.2.1;;
+
+{x = 2 , y = 5 , z= 0};;
+
+{x = 2 , y = 5 , z= 0}.x;;
+
+p = {na = {"luis","vidal"}, e =28};;
+
+p.na.1;;
+
+Int = <pos:Nat, zero:Bool, neg:Nat>;;
+p3 = <pos=3> as Int;;
+z0 = <zero=true> as Int;;
+n5 = <neg=5> as Int;;
+
+is_zero = L i : Int.
+  case i of
+    <pos=p> => false
+  | <zero=z> => true
+  | <neg=n> => false
+;;
+
+
+abs = L i : Int.
+case i of
+<pos=p> => (<pos=p> as Int)
+| <zero=z> => (<zero=true> as Int)
+| <neg=n> => (<pos=n> as Int);;
+
+is_zero p3;;
+is_zero z0;;
+is_zero n5;;
+
+abs p3;;
+abs z0;;
+abs n5;;
+
+nil[Nat];;
+
+necesitamos parentesis 
+
+cons[Nat] 3 (nil[Nat]);;
+
+cons[Nat] 5 (cons[Nat] 3 (nil[Nat]));;
+
+l = cons[Nat] 8 (cons[Nat] 5 (cons[Nat] 3 (nil[Nat])));;
+
+isnil[Nat] l;;
+
+head[Nat] l;;
+
+tail[Nat]l;;
+
+
+sum = 
+  letrec sum : Nat -> Nat -> Nat = 
+    lambda n : Nat. lambda m : Nat. if iszero n then m else succ (sum (pred n) m)
+  in
+    sum
+;;
+
+prod = 
+  letrec prod : Nat -> Nat -> Nat = 
+    lambda n : Nat. lambda m : Nat. if iszero m then 0 else sum n (prod n (pred m))
+  in
+    prod
+;;
+
+
+length = 
+  letrec length : List Nat -> Nat = 
+    lambda l : List Nat. if isnil[Nat] l then 0 else sum 1 (length (tail[Nat] l))
+  in
+    length
+;;
+
+length l;;
+
+N3 = Nat -> Nat -> Nat;;
+
+nil[N3];;
+
+cons[N3] sum (nil[N3]);;
+
+cons[N3] prod (cons[N3] sum (nil[N3]));;  
+
+(head[N3] (cons[N3] prod (cons[N3] sum (nil[N3])))) 12 5;;
+
+syntax error (min 1:04:12)
+{};;
+
+sintax error
+
+let
+  idr = lambda r : {}. r
+in
+  idr {x=0, y=1}
+;;
+
+(lambda r : {x : Nat}. r.x) {x=0, y=1};;
