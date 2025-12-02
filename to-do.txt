@@ -1,3 +1,0 @@
-try-catch in the 192 line 
-understand variant and case 
-understand apply-context

@@ -7,6 +7,7 @@ open Parser;;
 open Lexer;;
 
 
+(* read lines until dont find ;; *)
 let read_multiline () =
   let rec aux acc =
     let line = read_line () in
@@ -30,7 +31,7 @@ let read_multiline () =
   aux []
 ;;
 
-
+(*read the user sentence*)
 let top_level_loop () =
   print_endline "Evaluator of lambda expressions...";
   let rec loop ctx =
